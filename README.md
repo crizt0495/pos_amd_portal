@@ -453,10 +453,17 @@ Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
 Untuk proyek baru / re-import:
 
 ```bash
-git push origin main     # Git integration: Vercel otomatis build (root = portal)
-# atau deploy manual dari CLI:
-cd portal && npx vercel --prod
+npm run deploy          # WAJIB dari ROOT repo (bukan dari dalam portal/)
+                        # = vercel deploy --prod dari root; memakai vercel.json
+npm run deploy:preview  # deployment preview (opsional)
+git push origin main     # (jika Git auto-deploy diaktifkan di Dashboard Vercel)
 ```
+
+> **Jangan** menjalankan `vercel deploy` dari dalam folder `portal/` — karena
+> Root Directory proyek sudah `portal`, upload dari situ membuat Vercel mencari
+> `portal/portal` dan gagal ("Root Directory 'portal' does not exist").
+> Selalu deploy dari root repo, atau aktifkan Git auto-deploy di
+> Dashboard → Project → Settings → Git.
 
 `.vercelignore` di root repo mencegah file berat (node_modules, dist, release,
 .next) ikut terunggah ke Vercel.

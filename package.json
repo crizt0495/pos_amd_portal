@@ -14,6 +14,8 @@
     "dev:desktop": "npm --prefix ./desktop run dev",
     "build:desktop": "npm --prefix ./desktop run build",
     "dist:desktop": "npm --prefix ./desktop run dist:win",
+    "deploy": "vercel deploy --prod --yes",
+    "deploy:preview": "vercel deploy --yes",
     "typecheck": "npm --prefix ./portal run typecheck && npm --prefix ./desktop run typecheck",
     "test": "node tools/test/run-all.mjs",
     "test:statis": "node tools/test/run-all.mjs statis",
