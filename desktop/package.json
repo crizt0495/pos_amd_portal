@@ -5,6 +5,7 @@
   "private": true,
   "description": "KasirPro Desktop — Aplikasi Kasir Electron 100% offline untuk pembeli akhir",
   "author": "KasirPro",
+  "homepage": "https://github.com/crizt0495/pos_amd",
   "license": "UNLICIPED",
   "main": "electron/main.js",
   "scripts": {
