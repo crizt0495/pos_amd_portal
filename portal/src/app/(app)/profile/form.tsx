@@ -136,7 +136,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          aria-label="Ubah logo toko"
+          aria-label={`${inisial(namaToko || email)} — Ubah logo toko`}
           className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-zinc-100 ring-1 ring-zinc-200"
         >
           {preview || logoUrl ? (
@@ -144,11 +144,12 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={(preview ?? logoUrl) as string}
-              alt="Logo toko"
+              alt=""
+              aria-hidden="true"
               className="h-full w-full object-cover"
             />
           ) : (
-            <span className="text-[26px] font-bold text-zinc-400">
+            <span aria-hidden="true" className="text-[26px] font-bold text-zinc-400">
               {inisial(namaToko || email)}
             </span>
           )}
@@ -170,7 +171,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
             if (f) void onUpload(f);
           }}
         />
-        <p className="mt-2 text-[12px] text-zinc-400">Ketuk untuk upload logo toko (maks. 2 MB)</p>
+        <p className="mt-2 text-[12px] text-zinc-500">Ketuk untuk upload logo toko (maks. 2 MB)</p>
         {logoUrl ? (
           <button
             type="button"
@@ -278,7 +279,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
           </p>
         </div>
 
-        {/* 4 mahkota: tier aktif full, lainnya opacity 30% */}
+        {/* 4 mahkota: tier aktif full, lainnya warna redup tapi tetap kontras */}
         <ul className="mt-3 grid grid-cols-4 gap-2">
           {TIER_RULES.map((t) => {
             const current = t.name === tier.name;
@@ -289,17 +290,27 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
                   'flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-3 text-center transition',
                   current
                     ? 'border-zinc-900 bg-white shadow-card'
-                    : 'border-zinc-100 bg-zinc-50 opacity-30',
+                    : 'border-zinc-100 bg-zinc-50',
                 )}
               >
                 <span
-                  className="grid h-10 w-10 place-items-center rounded-full"
+                  className={cn(
+                    'grid h-10 w-10 place-items-center rounded-full',
+                    !current && 'opacity-40',
+                  )}
                   style={{ backgroundColor: `${t.color}1a` }}
                 >
                   <Crown className="h-5 w-5" style={{ color: t.color }} strokeWidth={2.5} />
                 </span>
-                <span className="text-[11px] font-bold leading-none text-zinc-800">{t.name}</span>
-                <span className="tabular text-[10px] leading-none text-zinc-400">
+                <span
+                  className={cn(
+                    'text-[11px] font-bold leading-none',
+                    current ? 'text-zinc-800' : 'text-zinc-500',
+                  )}
+                >
+                  {t.name}
+                </span>
+                <span className="tabular text-[10px] leading-none text-zinc-500">
                   {t.rate * 100}%
                 </span>
               </li>
@@ -307,7 +318,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
           })}
         </ul>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
+        <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
           Bronze 1-5 lisensi 5%, Silver 6-10 10%, Gold 11-30 20%, Platinum 30+ 30%. Total komisi Anda
           saat ini {rupiah(totalKomisi)}.
         </p>

@@ -36,13 +36,16 @@
 }
 
 @layer components {
-  /* Kerangka aplikasi mobile: max 430px, selalu di tengah */
+  /* Kerangka aplikasi: responsif semua perangkat.
+     Phone (<=639px) : kolom 430px (tampilan mobile-first)
+     Tablet (640+)   : kolom 560px
+     Desktop (768+)  : kolom 640px di tengah layar */
   .app-shell {
-    @apply relative mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-white;
+    @apply relative mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-white sm:max-w-[560px] md:max-w-[640px];
   }
 
   .app-content {
-    @apply flex-1 px-4 pb-28 pt-4;
+    @apply flex-1 px-4 pb-28 pt-4 sm:px-6 md:px-8;
   }
 
   .card-soft {

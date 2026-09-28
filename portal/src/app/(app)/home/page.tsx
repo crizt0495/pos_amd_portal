@@ -94,14 +94,14 @@ export default async function HomePage() {
       <section className="mt-6">
         <div className="mb-2.5 flex items-center justify-between">
           <h2 className="text-[15px] font-bold">Riwayat Komisi</h2>
-          <span className="text-[11px] text-zinc-400">{licenses.length} transaksi terakhir</span>
+          <span className="text-[11px] text-zinc-500">{licenses.length} transaksi terakhir</span>
         </div>
 
         {licenses.length === 0 ? (
           <div className="card-soft px-4 py-8 text-center">
             <KeyRound className="mx-auto h-6 w-6 text-zinc-300" />
             <p className="mt-2 text-[13px] font-medium text-zinc-600">Belum ada komisi</p>
-            <p className="mt-0.5 text-[12px] text-zinc-400">
+            <p className="mt-0.5 text-[12px] text-zinc-500">
               Buat Serial Key pertama di tab Aktivasi.
             </p>
             <Link
@@ -128,7 +128,7 @@ export default async function HomePage() {
                     {rupiah(l.komisi_amount)}
                   </span>
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-400">
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
                   <StatusBadge status={l.status} />
                   <code className="tabular tracking-wide">{l.serial_key}</code>
                 </div>

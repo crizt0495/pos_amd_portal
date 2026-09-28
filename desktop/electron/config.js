@@ -25,7 +25,11 @@ const path = require('node:path');
  *    macOS   : ~/Library/Application Support/KasirPro/config.json
  */
 
-const DEFAULT_PORTAL_URL = 'https://kasirpro-portal.vercel.app';
+// Domain produksi portal KasirPro (sudah live). Menjadi nilai bawaan sehingga
+// installer yang dirakit di GitHub Actions (tanpa secret apa pun) langsung
+// memakai portal asli. PORTAL_VERCEL_URL / build-config.json tetap menang
+// jika diisi (lihat urutan prioritas di atas).
+const DEFAULT_PORTAL_URL = 'https://pos-amd.vercel.app';
 
 function cleanUrl(value) {
   if (!value) return '';

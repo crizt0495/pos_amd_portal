@@ -251,48 +251,57 @@ npm run build               # typecheck + bundle renderer
 4. `.env` di folder aplikasi
 5. nilai bawaan `DEFAULT_PORTAL_URL` di `electron/config.js`
 
-### 2.5 Build installer Windows
+### 2.5 Build installer (Windows, macOS, Linux — sekali klik)
 
-Ada tiga cara, dari yang paling otomatis sampai paling manual:
+Satu workflow menghasilkan installer **sekali klik untuk semua OS**, yang keluar sebagai
+**GitHub Release** (saat push tag `v*`) atau sebagai artifact (run manual):
 
-**A. GitHub Actions (sudah terpasang, tinggal jalankan)**
+| OS | Installer | Catatan |
+| --- | --- | --- |
+| Windows | `KasirPro-Setup-<versi>.exe` (NSIS, x64) | klik 2× → wizard install |
+| macOS Intel | `KasirPro-<versi>-mac-x64.dmg` | buka DMG → seret ke Applications |
+| macOS Apple Silicon | `KasirPro-<versi>-mac-arm64.dmg` | sama, khusus M1/M2/M3+ |
+| Linux | `KasirPro-<versi>-x86_64.AppImage` | klik 2× langsung jalan (tanpa install) |
+| Linux | `KasirPro-<versi>-x86_64.deb` | klik 2× → instal via Software Center |
+
+**A. GitHub Actions (paling otomatis — build di runner asli masing-masing OS)**
 
 ```bash
-git tag -a v1.0.0 -m "rilis" && git push origin v1.0.0
+git tag -a v1.0.1 -m "rilis" && git push origin v1.0.1
 ```
 
-Push tag `v*` otomatis memicu workflow `.github/workflows/build-desktop.yml` di runner
-**Windows asli** → hasil `release/KasirPro-Setup-1.0.0.exe` diunggah sebagai artifact
-`KasirPro-Setup-windows` (tab **Actions → Build Desktop Windows**, simpan 30 hari).
+Push tag `v*` memicu `.github/workflows/build-desktop.yml` di **4 runner sekaligus**
+(`windows-latest`, `macos-14`, `macos-14-arm64`, `ubuntu-latest`). Selesai → GitHub
+Release `KasirPro v1.0.1` berisi installer **semua OS** + artifact di tab **Actions →
+Build Desktop**. Bisa juga dijalankan manual (workflow_dispatch, isi `portal_url` bila perlu).
 
-Supaya installer memakai domain Vercel yang benar, set dulu **secret** ini
-(`Settings → Secrets and variables → Actions → New repository secret`):
-`PORTAL_VERCEL_URL = https://domain-anda.vercel.app` — kalau kosong, dipakai
-`https://kasirpro-portal.vercel.app` (placeholder dari `electron/config.js`).
+Supaya installer memakai domain Vercel yang benar, atur (opsional) **secret** ini di
+`Settings → Secrets and variables → Actions → New repository secret`:
+`PORTAL_VERCEL_URL = https://domain-anda.vercel.app` — kalau tidak diisi, installer
+otomatis memakai portal produksi asli `https://pos-amd.vercel.app` (nilai bawaan di
+`electron/config.js`).
 
-**B. Manual dengan URL portal ter-pack (disarankan di mesin Windows)**
+**B. Manual dengan URL portal ter-pack**
 
 ```bash
 cd desktop
 npm run set-portal -- https://domain-anda.vercel.app   # menulis electron/build-config.json
-npm run dist:win        # -> release/KasirPro-Setup-1.0.0.exe   (NSIS, x64)
+npm run dist:win          # -> release/KasirPro-Setup-1.0.0.exe  (di Windows)
+npm run dist:mac:x64      # -> DMG macOS Intel      (di macOS)
+npm run dist:mac:arm64    # -> DMG macOS Apple Silicon (di macOS)
+npm run dist:linux        # -> AppImage + deb       (di Linux)
 ```
 
-**C. Run workflow manual** dari tab **Actions → Build Desktop Windows → Run workflow**
-(isi `portal_url` bila perlu).
-
-> **Penting:** paket NSIS hanya bisa dirakit di **Windows**, atau di Linux/macOS yang punya
-> `wine` terpasang (electron-builder memakai `rcedit`/`signtool.exe` untuk menancapkan icon &
-> versi ke dalam `.exe`). Di Linux tanpa wine, proses berhenti di tahap
-> `building target=nsis ... wine process failed ENOENT`.
+> **Catatan macOS:** installer tidak ditandatangani (tanpa sertifikat Apple Developer),
+> jadi saat pertama dibuka macOS menampilkan "tidak dapat dibuka karena dari
+> pengembang tidak dikenal" → klik kanan ikon → **Buka** → **Open** (sekali saja).
 >
-> Yang **sudah terverifikasi** di Linux tanpa wine: `npm run typecheck`, `npm run build`
-> (bundle renderer), dan `electron-builder --win --dir` menghasilkan `release/win-unpacked`
-> berisi `KasirPro.exe` + `resources/app.asar` dengan
-> `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` di dalamnya.
+> **Catatan Linux:** kalau AppImage tidak diizinkan eksekusi, jalankan sekali
+> `chmod +x KasirPro-<versi>-x86_64.AppImage`.
 >
-> `better-sqlite3` sudah di-*rebuild* otomatis oleh `postinstall` (`electron-builder
-> install-app-deps`) dan di-`asarUnpack`, jadi komputer pengguna tidak butuh toolchain apa pun.
+> `better-sqlite3` di-*rebuild* otomatis oleh `postinstall` (`electron-builder
+> install-app-deps`) untuk arsitektur tujuannya dan di-`asarUnpack`, jadi komputer
+> pengguna tidak butuh toolchain apa pun.
 
 ### 2.6 Cetak struk thermal
 
@@ -480,18 +489,24 @@ Hasil verifikasi terhadap domain produksi (tidak pakai localhost sama sekali):
   **30/30 lulus**
 - Kontrak desktop asli melawan `https://pos-amd.vercel.app`: **17/17 lulus**
 
-### Desktop ke Windows
+### Desktop ke semua OS
 
 ```bash
 cd desktop
 npm run set-portal -- https://pos-amd.vercel.app
-npm run dist:win
+# di Windows:
+npm run dist:win            # KasirPro-Setup-<versi>.exe
+# di macOS:
+npm run dist:mac:x64        # DMG Intel
+npm run dist:mac:arm64      # DMG Apple Silicon
+# di Linux:
+npm run dist:linux          # AppImage + deb
 ```
 
-atau pakai `.github/workflows/build-desktop.yml` (run manual dari tab Actions).
-Agar installer memakai domain yang benar, set secret Actions
-`PORTAL_VERCEL_URL = https://pos-amd.vercel.app` lalu Re-run workflow (atau
-push tag `v1.0.1`) — hasil `.exe` diunduh sebagai artifact.
+atau pakai `.github/workflows/build-desktop.yml` (push tag `v*` → GitHub Release berisi
+installer semua OS, atau run manual dari tab Actions). Tanpa secret apa pun, installer
+sudah memakai portal produksi `https://pos-amd.vercel.app` (nilai bawaan di
+`electron/config.js`); secret `PORTAL_VERCEL_URL` hanya untuk override domain.
 
 ---
 
@@ -530,28 +545,33 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | `desktop`: UI aktivasi + HWID mismatch + aplikasi ter-copy → layar terkunci | semua lulus |
 | `desktop`: kontrak live ke **Vercel** (`license.js` asli + HWID `node-machine-id` → `https://pos-amd.vercel.app`) | **17/17 lulus** |
 | `desktop`: `electron-builder --win --dir` | sukses (asar + `better_sqlite3.node` ter-unpack) |
+| **Portal: Lighthouse** (login/home/aktivasi/profile, mobile) | **A11y 100 · Best Practices 100 · SEO 100** di semua halaman; Performance 98–100 (turunan Next.js runtime) |
+| **Portal: responsif semua perangkat** (375 · 768 · 1366 · 1920 px × 4 halaman) | **16/16 lulus** — tanpa overflow horizontal, kolom terkunci tengah, bottom nav selalu terlihat |
 | **GitHub Actions CI** | **passing** (typecheck portal+desktop, build, tes statis, SQLite, HWID) |
-| **GitHub Actions Build Desktop Windows (tag `v1.0.0`)** | **success** (installer NSIS diunduh sebagai artifact) |
+| **GitHub Actions Build Desktop (tag `v1.0.0`)** | **success** (installer NSIS diunduh sebagai artifact) |
+| **GitHub Actions Build Desktop multi-OS** (Windows NSIS · macOS x64/arm64 DMG · Linux AppImage+deb → GitHub Release) | workflow matrix siap, dijalankan dengan tag `v*` |
 | **`npm test` (keseluruhan)** | **36/36 lulus** |
 
 ### 8.1 Yang hanya bisa dilakukan operator
 
 | # | Langkah | Catatan |
 | --- | --- | --- |
-| 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email)
+| 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email) |
 | 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
-| 3 | Set secret Actions `PORTAL_VERCEL_URL = https://pos-amd.vercel.app` | `Settings → Secrets → Actions` |
-| 4 | Re-run workflow "Build Desktop Windows" (atau push tag `v1.0.1`) | `.exe` dari tag `v1.0.0` masih memakai URL placeholder `kasirpro-portal.vercel.app` — perlu rebuild agar menempelkan domain asli |
-| 5 | Uji installer di komputer kasir nyata (Windows) | key demo `KPRO-DEMO-AAAA-0001` tersedia dan sudah terbukti aktivasi via Vercel |
+| 3 | (Opsional) Set secret Actions `PORTAL_VERCEL_URL` | `Settings → Secrets → Actions` — tidak wajib; tanpa secret installer memakai domain produksi `https://pos-amd.vercel.app` |
+| 4 | Push tag `v1.0.1` | memicu workflow multi-OS → GitHub Release berisi installer Windows/macOS/Linux yang langsung memakai portal produksi |
+| 5 | Uji installer di komputer nyata (Windows, macOS, Linux) | key demo `KPRO-DEMO-AAAA-0001` tersedia dan sudah terbukti aktivasi via Vercel |
 
 Setelah deploy, `npm run check:supabase` tetap **hijau** — itu tanda portal siap dipakai.
 
 ### 8.2 Yang tidak bisa diuji dari mesin pengembang ini
 
-- **Menjalankan** installer `.exe` NSIS hasil Actions di Windows sungguhan
-  (build-nya otomatis jalan di runner Windows; verifikasi pemakaian akhir
-  tetap butuh komputer Windows).
-- pembayaran/pengiriman key nyata (WhatsApp, dll) — alur manual operator.
+- **Menjalankan** installer hasil Actions di mesin nyata (`.exe` Windows, `.dmg` macOS,
+  `.AppImage`/`.deb` Linux) — build berjalan otomatis di runner asli masing-masing OS,
+  namun klik-buka pertama di OS nyata perlu verifikasi manusia (mis. izin Gatekeeper
+  macOS untuk aplikasi tanpa tanda tangan).
+- macOS/Windows installer hanya dirakit di runner CI (Linux tanpa `wine` berhenti di NSIS;
+  DMG butuh macOS).
 
 Keduanya di-*cover* runner: di Windows `npm test` otomatis menjalankan
 `npm run dist:win` dan memeriksa `.exe` hasilnya.

@@ -34,7 +34,7 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint ? <p className="mt-1 text-[12px] text-zinc-400">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-[12px] text-zinc-500">{hint}</p> : null}
     </div>
   );
 }
@@ -66,7 +66,7 @@ export function Segmented<T extends string>({
           >
             <span className="block truncate">{opt.label}</span>
             {opt.sub ? (
-              <span className={cn('block text-[11px]', active ? 'text-white/70' : 'text-zinc-400')}>
+              <span className={cn('block text-[11px]', active ? 'text-white/70' : 'text-zinc-500')}>
                 {opt.sub}
               </span>
             ) : null}

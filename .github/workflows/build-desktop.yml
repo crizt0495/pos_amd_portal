@@ -1,20 +1,25 @@
 # =============================================================================
-#  Build installer Windows KasirPro Desktop
+#  Build installer KasirPro Desktop — SEMUA OS sekali klik
 # =============================================================================
-#  Dipakai karena paket NSIS hanya bisa dirakit di OS Windows
-#  (electron-builder butuh rcedit/signtool.exe).
+#  Menghasilkan installer sekali klik untuk:
+#    - Windows  : KasirPro-Setup-<versi>.exe         (NSIS, x64)
+#    - macOS    : KasirPro-<versi>-mac-<arch>.dmg    (Intel x64 + Apple Silicon arm64)
+#    - Linux    : KasirPro-<versi>-x86_64.AppImage   (jalankan langsung)
+#                 KasirPro-<versi>-x86_64.deb        (instal via klik ganda)
 #
 #  Cara pakai:
-#   1. Push repo ini ke GitHub
-#   2. Buka tab "Actions" > "Build Desktop Windows" > "Run workflow"
-#   3. Download artifact "KasirPro-Setup-windows" (file .exe di dalamnya)
+#   1. Push tag v<versi> (mis. v1.0.1) -> workflow ini berjalan otomatis
+#   2. Selesai: GitHub Release dibuat berisi installer SEMUA OS + artifact
+#      (GitHub > Releases > KasirPro v<versi>)
+#   3. Atau jalankan manual: tab Actions > "Build Desktop" > Run workflow
 #
-#  Agar hasil build memakai domain portal yang benar, set secret:
+#  Tanpa secret pun installer sudah memakai portal produksi asli
+#  (https://pos-amd.vercel.app — nilai bawaan di desktop/electron/config.js).
+#  PORTAL_VERCEL_URL menjadi override opsional bila domain diganti:
 #   Settings > Secrets and variables > Actions > New repository secret
 #     PORTAL_VERCEL_URL  = https://domain-anda.vercel.app
-#  Kalau secret tidak diisi, dipakai nilai bawaan di desktop/electron/config.js
 # =============================================================================
-name: Build Desktop Windows
+name: Build Desktop (Windows, macOS, Linux)
 
 on:
   workflow_dispatch:
@@ -28,7 +33,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: desktop-${{ github.ref }}
@@ -36,9 +41,40 @@ concurrency:
 
 jobs:
   build:
-    name: NSIS x64
-    runs-on: windows-latest
-    timeout-minutes: 30
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64 (NSIS)
+            os: windows-latest
+            args: --win --x64
+            artifact: KasirPro-Setup-windows
+            files: |
+              desktop/release/*.exe
+          - label: macOS Intel (x64)
+            os: macos-14
+            args: --mac --x64
+            artifact: KasirPro-macOS-x64
+            files: |
+              desktop/release/*.dmg
+              desktop/release/*.zip
+          - label: macOS Apple Silicon (arm64)
+            os: macos-14-arm64
+            args: --mac --arm64
+            artifact: KasirPro-macOS-arm64
+            files: |
+              desktop/release/*.dmg
+              desktop/release/*.zip
+          - label: Linux x64 (AppImage + deb)
+            os: ubuntu-latest
+            args: --linux
+            artifact: KasirPro-Linux
+            files: |
+              desktop/release/*.AppImage
+              desktop/release/*.deb
 
     steps:
       - name: Checkout
@@ -51,28 +87,27 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
+      - name: Sinkronkan versi dari tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF##*/}"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('desktop/package.json','utf8'));p.version='${VERSION}';fs.writeFileSync('desktop/package.json',JSON.stringify(p,null,2)+'\n')"
+
       - name: Tentukan URL portal
         id: portal
-        shell: pwsh
+        shell: bash
         env:
           FROM_INPUT: ${{ inputs.portal_url }}
           FROM_SECRET: ${{ secrets.PORTAL_VERCEL_URL }}
         run: |
-          $url = if ($env:FROM_INPUT) { $env:FROM_INPUT }
-                 elseif ($env:FROM_SECRET) { $env:FROM_SECRET }
-                 else { '' }
-          if (-not $url) {
-            Write-Host '::warning::PORTAL_VERCEL_URL kosong - memakai nilai bawaan electron/config.js (PASTIKAN domain Vercel sudah benar!)'
-          } else {
-            Write-Host "Portal URL untuk build: $url"
-          }
-          "url=$url" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          node -e "const fs=require('fs');const u=process.env.FROM_INPUT||process.env.FROM_SECRET||'';fs.appendFileSync(process.env.GITHUB_OUTPUT,'url='+u+'\n');if(!u)console.log('Portal: memakai nilai bawaan https://pos-amd.vercel.app (electron/config.js)')else console.log('Portal URL untuk build: '+u)"
 
       - name: Install dependencies
         working-directory: desktop
         run: npm ci
 
-      - name: Tulis konfigurasi build
+      - name: Tulis konfigurasi build (domain portal)
         if: steps.portal.outputs.url != ''
         working-directory: desktop
         run: npm run set-portal -- ${{ steps.portal.outputs.url }}
@@ -81,16 +116,35 @@ jobs:
         working-directory: desktop
         run: npm run typecheck
 
-      - name: Build renderer + installer
+      - name: Rakit installer ${{ matrix.label }}
         working-directory: desktop
-        run: npm run dist:win
+        run: npm run build && npx electron-builder ${{ matrix.args }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Unggah installer
+      - name: Unggah artifact ${{ matrix.artifact }}
         uses: actions/upload-artifact@v4
         with:
-          name: KasirPro-Setup-windows
-          path: desktop/release/*.exe
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Publikasikan GitHub Release (saat push tag v*)
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Unduh semua installer
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Buat Release berisi installer semua OS
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/**
+          generate_release_notes: true

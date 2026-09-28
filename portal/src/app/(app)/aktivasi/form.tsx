@@ -127,7 +127,7 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
           <p className="tabular mt-1 text-[16px] font-bold text-zinc-900">
             {rupiah(PAKET_PRICE[paket])}
           </p>
-          <p className="text-[10px] text-zinc-400">{PAKET_LABEL_PANJANG[paket]}</p>
+          <p className="text-[10px] text-zinc-500">{PAKET_LABEL_PANJANG[paket]}</p>
         </div>
         <div className="card-soft px-3 py-3">
           <div className="flex items-center gap-1.5 text-zinc-500">
@@ -135,7 +135,7 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
             <span className="text-[11px] font-semibold uppercase tracking-wide">Komisi</span>
           </div>
           <p className="tabular mt-1 text-[16px] font-bold text-zinc-900">{rupiah(komisiPerKey)}</p>
-          <p className="text-[10px] text-zinc-400">
+          <p className="text-[10px] text-zinc-500">
             Tier {tier.name} · {tier.rate * 100}%
           </p>
         </div>
@@ -269,7 +269,7 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt className="text-zinc-400">{label}</dt>
+      <dt className="text-zinc-500">{label}</dt>
       <dd className="truncate font-semibold text-zinc-800">{value}</dd>
     </div>
   );

@@ -18,7 +18,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Navigasi utama"
-      className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-zinc-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-zinc-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:max-w-[560px] md:max-w-[640px]"
     >
       <ul className="grid grid-cols-3">
         {ITEMS.map(({ href, label, Icon }) => {
@@ -31,7 +31,7 @@ export function BottomNav() {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex w-full flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition',
-                  active ? 'text-zinc-900' : 'text-zinc-400',
+                  active ? 'text-zinc-900' : 'text-zinc-600',
                 )}
               >
                 <span

@@ -9,32 +9,63 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/auth/login — login dengan USERNAME (atau email) + password.
  *
+ * Menerima dua bentuk body:
+ *   1. form-urlencoded  (halaman login server-rendered) -> redirect 303
+ *   2. application/json (klien API)                     -> JSON {ok,message}
+ *
  * Alur:
  *   1. kalau input berisi "@"  -> langsung dianggap email toko
  *   2. selain itu              -> cari email dari `partners.username`
  *   3. signInWithPassword(email, password) via sesi cookie (supabase-ssr)
- *
- * Menangani akun yang dibuat lewat Supabase Auth (user + partner trigger).
  */
 
 const USERNAME_RE = /^[a-z0-9._-]+$/;
 
+/** `next` yang aman: hanya path lokal, hindari open redirect (//evil.com). */
+function safeNext(raw: string): string {
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/home';
+}
+
+function isFormRequest(ct: string): boolean {
+  return !ct.toLowerCase().includes('application/json');
+}
+
 export async function POST(req: Request) {
+  const ct = req.headers.get('content-type') || '';
+
   let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, message: 'Body JSON tidak valid.' }, { status: 400 });
+  if (isFormRequest(ct)) {
+    const fd = await req.formData().catch(() => null);
+    if (!fd) {
+      return NextResponse.json({ ok: false, message: 'Body tidak valid.' }, { status: 400 });
+    }
+    raw = { username: fd.get('username'), password: fd.get('password'), next: fd.get('next') };
+  } else {
+    try {
+      raw = await req.json();
+    } catch {
+      return NextResponse.json({ ok: false, message: 'Body JSON tidak valid.' }, { status: 400 });
+    }
   }
-  const body = (raw ?? {}) as { username?: unknown; password?: unknown };
+
+  const body = (raw ?? {}) as { username?: unknown; password?: unknown; next?: unknown };
   const username = String(body.username ?? '').trim();
   const password = String(body.password ?? '');
+  const next = safeNext(String(body.next ?? ''));
+
+  const form = isFormRequest(ct);
+
+  // Respon error konsisten untuk dua format body (redirect vs JSON).
+  const fail = (message: string, status: number) => {
+    if (!form) return NextResponse.json({ ok: false, message }, { status });
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', next);
+    url.searchParams.set('error', message);
+    return NextResponse.redirect(url, { status: 303 });
+  };
 
   if (!username || !password) {
-    return NextResponse.json(
-      { ok: false, message: 'Username dan password wajib diisi.' },
-      { status: 422 },
-    );
+    return fail('Username dan password wajib diisi.', 422);
   }
 
   // --- tentukan email target -------------------------------------------------
@@ -44,10 +75,7 @@ export async function POST(req: Request) {
   } else {
     const clean = username.toLowerCase().replace(/[^a-z0-9._-]/g, '');
     if (!clean || !USERNAME_RE.test(clean)) {
-      return NextResponse.json(
-        { ok: false, message: 'Username hanya boleh huruf, angka, titik, garis.' },
-        { status: 422 },
-      );
+      return fail('Username hanya boleh huruf, angka, titik, garis.', 422);
     }
 
     const admin = createAdminClient();
@@ -59,13 +87,10 @@ export async function POST(req: Request) {
 
     if (!partner?.email) {
       // Jangan bocorkan apakah usernamenya ada — respon sama untuk salah password.
-      return NextResponse.json({ ok: false, message: 'Username atau password salah.' }, { status: 401 });
+      return fail('Username atau password salah.', 401);
     }
     if (partner.status === 'suspended') {
-      return NextResponse.json(
-        { ok: false, message: 'Akun toko Anda dinonaktifkan. Hubungi admin.' },
-        { status: 403 },
-      );
+      return fail('Akun toko Anda dinonaktifkan. Hubungi admin.', 403);
     }
     email = partner.email;
   }
@@ -77,16 +102,16 @@ export async function POST(req: Request) {
   if (error) {
     const msg = error.message || '';
     if (/invalid login credentials/i.test(msg)) {
-      return NextResponse.json({ ok: false, message: 'Username atau password salah.' }, { status: 401 });
+      return fail('Username atau password salah.', 401);
     }
     if (/email not confirmed/i.test(msg)) {
-      return NextResponse.json(
-        { ok: false, message: 'Email belum dikonfirmasi. Cek kotak masuk Anda.' },
-        { status: 401 },
-      );
+      return fail('Email belum dikonfirmasi. Cek kotak masuk Anda.', 401);
     }
-    return NextResponse.json({ ok: false, message: msg }, { status: 401 });
+    return fail(msg, 401);
   }
 
+  if (form) {
+    return NextResponse.redirect(new URL(next, req.url), { status: 303 });
+  }
   return NextResponse.json({ ok: true });
 }
