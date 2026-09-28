@@ -249,7 +249,24 @@ npm run build               # typecheck + bundle renderer
 
 ### 2.5 Build installer Windows
 
-Cara paling aman (URL portal ikut ter-*pack* ke dalam `.exe`):
+Ada tiga cara, dari yang paling otomatis sampai paling manual:
+
+**A. GitHub Actions (sudah terpasang, tinggal jalankan)**
+
+```bash
+git tag -a v1.0.0 -m "rilis" && git push origin v1.0.0
+```
+
+Push tag `v*` otomatis memicu workflow `.github/workflows/build-desktop.yml` di runner
+**Windows asli** → hasil `release/KasirPro-Setup-1.0.0.exe` diunggah sebagai artifact
+`KasirPro-Setup-windows` (tab **Actions → Build Desktop Windows**, simpan 30 hari).
+
+Supaya installer memakai domain Vercel yang benar, set dulu **secret** ini
+(`Settings → Secrets and variables → Actions → New repository secret`):
+`PORTAL_VERCEL_URL = https://domain-anda.vercel.app` — kalau kosong, dipakai
+`https://kasirpro-portal.vercel.app` (placeholder dari `electron/config.js`).
+
+**B. Manual dengan URL portal ter-pack (disarankan di mesin Windows)**
 
 ```bash
 cd desktop
@@ -257,9 +274,8 @@ npm run set-portal -- https://domain-anda.vercel.app   # menulis electron/build-
 npm run dist:win        # -> release/KasirPro-Setup-1.0.0.exe   (NSIS, x64)
 ```
 
-Alternatif tanpa Windows — pakai GitHub Actions
-(`.github/workflows/build-desktop.yml`): **Actions → Build Desktop Windows → Run workflow**,
-hasil `.exe` bisa diunduh sebagai artifact.
+**C. Run workflow manual** dari tab **Actions → Build Desktop Windows → Run workflow**
+(isi `portal_url` bila perlu).
 
 > **Penting:** paket NSIS hanya bisa dirakit di **Windows**, atau di Linux/macOS yang punya
 > `wine` terpasang (electron-builder memakai `rcedit`/`signtool.exe` untuk menancapkan icon &
@@ -491,17 +507,20 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | --- | --- | --- |
 | 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `toko@contoh.com` |
 | 2 | Deploy `portal` ke Vercel | butuh akun Vercel Anda; isi env sesuai `.env.example` |
-| 3 | `npm run set-portal -- https://domain-anda.vercel.app` lalu `npm run dist:win` | installer NSIS butuh Windows atau `wine`; alternatif: GitHub Actions |
-| 4 | Uji aktivasi nyata dari Vercel (key dari portal → tempel ke aplikasi desktop) | sama seperti kontrak live di atas, hanya domainnya ganti |
+| 3 | Set secret Actions `PORTAL_VERCEL_URL` = domain Vercel Anda | `Settings → Secrets → Actions`; kalau kosong installer memakai placeholder `kasirpro-portal.vercel.app` |
+| 4 | Trigger build installer | sudah otomatis via push tag `v1.0.0`; atau Re-run workflow → download artifact `KasirPro-Setup-windows` |
+| 5 | Uji installer di komputer kasir nyata (Windows) | key demo `KPRO-DEMO-AAAA-0001` masih tersedia untuk aktivasi |
 
 Setelah deploy, `npm run check:supabase` tetap **hijau** — itu tanda portal siap dipakai.
 
-### 8.2 Yang tidak bisa diuji di mesin ini
+### 8.2 Yang tidak bisa diuji dari mesin pengembang ini
 
-- installer `.exe` NSIS final (butuh Windows/wine)
-- panggilan HTTP ke domain Vercel yang sudah live
+- **Menjalankan** installer `.exe` NSIS hasil Actions di Windows sungguhan
+  (build-nya otomatis jalan di runner Windows; verifikasi pemakaian akhir
+  tetap butuh komputer Windows).
+- panggilan HTTP ke domain Vercel yang sudah live.
 
-Keduanya tetap di-*cover* oleh runner: di Windows `npm test` otomatis menjalankan
+Keduanya di-*cover* runner: di Windows `npm test` otomatis menjalankan
 `npm run dist:win` dan memeriksa `.exe` hasilnya.
 
 ---
