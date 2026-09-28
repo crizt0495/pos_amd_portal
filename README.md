@@ -256,6 +256,9 @@ npm run build               # typecheck + bundle renderer
 Satu workflow menghasilkan installer **sekali klik untuk semua OS**, yang keluar sebagai
 **GitHub Release** (saat push tag `v*`) atau sebagai artifact (run manual):
 
+> **Download installer rilis terbaru:** https://github.com/crizt0495/pos_amd/releases
+> (Release `v1.0.1` sudah berisi file untuk Windows, macOS Intel/Apple Silicon, dan Linux)
+
 | OS | Installer | Catatan |
 | --- | --- | --- |
 | Windows | `KasirPro-Setup-<versi>.exe` (NSIS, x64) | klik 2× → wizard install |
@@ -549,7 +552,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | **Portal: responsif semua perangkat** (375 · 768 · 1366 · 1920 px × 4 halaman) | **16/16 lulus** — tanpa overflow horizontal, kolom terkunci tengah, bottom nav selalu terlihat |
 | **GitHub Actions CI** | **passing** (typecheck portal+desktop, build, tes statis, SQLite, HWID) |
 | **GitHub Actions Build Desktop (tag `v1.0.0`)** | **success** (installer NSIS diunduh sebagai artifact) |
-| **GitHub Actions Build Desktop multi-OS** (Windows NSIS · macOS x64/arm64 DMG · Linux AppImage+deb → GitHub Release) | workflow matrix siap, dijalankan dengan tag `v*` |
+| **GitHub Actions Build Desktop multi-OS** (Windows NSIS · macOS x64/arm64 DMG · Linux AppImage+deb → GitHub Release) | **success** — Release **v1.0.1** berisi installer semua OS (lihat bagian 2.5) |
 | **`npm test` (keseluruhan)** | **36/36 lulus** |
 
 ### 8.1 Yang hanya bisa dilakukan operator
