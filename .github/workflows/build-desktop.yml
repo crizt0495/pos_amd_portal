@@ -94,14 +94,23 @@ jobs:
           VERSION="${GITHUB_REF##*/}"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('desktop/package.json','utf8'));p.version='${VERSION}';fs.writeFileSync('desktop/package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Tentukan URL portal
+      - name: Tentukan URL portal (override opsional)
         id: portal
         shell: bash
-        env:
-          FROM_INPUT: ${{ inputs.portal_url }}
-          FROM_SECRET: ${{ secrets.PORTAL_VERCEL_URL }}
+        # Safety net: bila langkah ini bermasalah, build tetap jalan dengan
+        # portal produksi bawaan (https://pos-amd.vercel.app di config.js).
+        continue-on-error: true
         run: |
-          node -e "const fs=require('fs');const u=process.env.FROM_INPUT||process.env.FROM_SECRET||'';fs.appendFileSync(process.env.GITHUB_OUTPUT,'url='+u+'\n');if(!u)console.log('Portal: memakai nilai bawaan https://pos-amd.vercel.app (electron/config.js)')else console.log('Portal URL untuk build: '+u)"
+          URL="${{ github.event.inputs.portal_url }}"
+          if [ -z "$URL" ]; then
+            URL="${{ secrets.PORTAL_VERCEL_URL }}"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          if [ -n "$URL" ]; then
+            echo "Portal URL untuk build: $URL"
+          else
+            echo "Tanpa override - memakai portal produksi bawaan (pos-amd.vercel.app)"
+          fi
 
       - name: Install dependencies
         working-directory: desktop
