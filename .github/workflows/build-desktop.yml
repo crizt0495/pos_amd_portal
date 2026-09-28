@@ -61,8 +61,8 @@ jobs:
             files: |
               desktop/release/*.dmg
               desktop/release/*.zip
-          - label: macOS Apple Silicon (arm64)
-            os: macos-14-arm64
+          - label: macOS Apple Silicon (arm64 — cross-build)
+            os: macos-14
             args: --mac --arm64
             artifact: KasirPro-macOS-arm64
             files: |
