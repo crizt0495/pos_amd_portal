@@ -466,7 +466,21 @@ Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
   `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_NAME`
 
-Untuk proyek baru / re-import:
+**Auto-deploy otomatis (GitHub Actions)** — workflow `.github/workflows/deploy-vercel.yml`
+langsung men-deploy ke production setiap push ke `main` yang menyentuh folder `portal/`.
+
+Aktifkan sekali dengan membuat **satu secret** di repo
+(`Settings → Secrets and variables → Actions → New repository secret`):
+
+```
+Name : VERCEL_TOKEN
+Value: token dari https://vercel.com/account/settings/tokens
+```
+
+Org & Project ID sudah tertanam di workflow (bukan rahasia). Selama `VERCEL_TOKEN`
+belum diisi, step deploy otomatis di-*skip* tanpa error.
+
+Untuk deploy manual:
 
 ```bash
 npm run deploy          # WAJIB dari ROOT repo (bukan dari dalam portal/)
