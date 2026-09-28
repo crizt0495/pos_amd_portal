@@ -12,6 +12,11 @@
 --  portal/scripts/create-demo-user.mjs dulu (jangan insert auth.users manual —
 --  akun tanpa identities tidak bisa login). Sisanya di file ini berjalan saat
 --  akunnya sudah ada.
+--
+--  LOGIN DEMO DI PORTAL:
+--      username : demo
+--      password : toko12345
+--  (email toko@contoh.com / toko12345 juga tetap bisa dipakai)
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
@@ -31,8 +36,8 @@
 --  Auth belum dibuat.
 
 -- pastikan baris partners siap untuk data demo (user_id dari Auth, tanpa ID keras)
-insert into public.partners (user_id, email, nama_toko, no_hp, alamat, license_quota, total_terjual, komisi_total)
-select u.id, u.email, 'DEMO Toko Berkah', '08123456789', 'Jl. Merdeka No. 10, Bandung', 5, 3, 12000
+insert into public.partners (user_id, email, username, nama_toko, no_hp, alamat, license_quota, total_terjual, komisi_total)
+select u.id, u.email, 'demo', 'DEMO Toko Berkah', '08123456789', 'Jl. Merdeka No. 10, Bandung', 5, 3, 12000
   from auth.users u
  where u.email = 'toko@contoh.com'
 on conflict (user_id) do update set
@@ -42,6 +47,12 @@ on conflict (user_id) do update set
   license_quota = excluded.license_quota,
   total_terjual = excluded.total_terjual,
   komisi_total  = excluded.komisi_total;
+
+-- username unik untuk akun demo (login pakai username & password)
+update public.partners
+   set username = 'demo'
+ where email = 'toko@contoh.com'
+   and (username is null or username <> 'demo');
 
 -- ---------------------------------------------------------------------------
 -- 2. Riwayat Serial Key contoh

@@ -126,6 +126,13 @@ for (const table of ['partners', 'licenses']) {
   else if (noFunc(res.body)) bad(`Kolom/kolom pada ${table} tidak cocok — jalankan ulang schema.sql (idempotent)`);
   else bad(`Tabel public.${table} error: ${res.status} ${res.body?.message || res.raw}`);
 }
+{
+  // username dipakai untuk login (username & password)
+  const res = await rest('/partners?select=username&limit=1');
+  if (res.status === 200) ok('Kolom partners.username ada (login pakai username)');
+  else if (noFunc(res.body)) bad('Kolom partners.username belum ada — jalankan ulang schema.sql');
+  else bad(`partners.username error: ${res.status} ${res.body?.message || res.raw}`);
+}
 
 console.log('\n4. Fungsi RPC');
 {
@@ -190,7 +197,7 @@ console.log('\n5. Storage (logo toko)');
 
 console.log('\n6. Data toko');
 {
-  const res = await rest('/partners?select=id,email,nama_toko,license_quota,total_terjual&limit=20');
+  const res = await rest('/partners?select=id,email,username,nama_toko,license_quota,total_terjual&limit=20');
   const rows = Array.isArray(res.body) ? res.body : [];
   if (res.status === 200 && rows.length === 0) {
     info('Belum ada toko terdaftar. Buat akun di Supabase > Authentication > Users > Add user');
@@ -199,10 +206,11 @@ console.log('\n6. Data toko');
     for (const p of rows) {
       console.log(
         d(
-          `      ${p.email || '(tanpa email)'} | ${p.nama_toko} | sisa ${p.license_quota} | terjual ${p.total_terjual}`,
+          `      @${p.username || '(tanpa username)'} | ${p.email || '(tanpa email)'} | ${p.nama_toko} | sisa ${p.license_quota} | terjual ${p.total_terjual}`,
         ),
       );
     }
+    console.log(d('      login demo: username "demo" / password "toko12345" (lihat halaman login)'));
     const tanpa = rows.filter((p) => !p.license_quota);
     if (tanpa.length) {
       info(

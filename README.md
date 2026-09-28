@@ -150,13 +150,17 @@ Opsional — data contoh untuk mencoba semua tampilan:
    Dari CLI bisa langsung:
 
 ```bash
-cd portal && npm run seed:user    # baca .env.local, buat toko@contoh.com / toko12345
-node scripts/create-demo-user.mjs --email a@b.co --password rahasia --nama "Toko Saya"
+cd portal && npm run seed:user    # baca .env.local, buat akun demo
+node scripts/create-demo-user.mjs --email a@b.co --password rahasia --nama "Toko Saya" --username toko
 ```
 
    > **Jangan** insert `auth.users` manual lewat SQL: akun tanpa baris `auth.identities`
    > membuat login gagal dengan 500 "Database error querying schema". Buat lewat
    > dashboard / endpoint admin saja.
+
+   > **Login**: pakai **Username** (kolom `partners.username`, default = email sebelum `@`)
+   > + password. Email toko juga tetap bisa dipakai di kolom yang sama. Halaman login
+   > selalu menampilkan info **Akun Demo** (`demo` / `toko12345`) + tombol *Isi otomatis*.
 
 4. Topup kuota + nama toko:
 
@@ -534,7 +538,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 
 | # | Langkah | Catatan |
 | --- | --- | --- |
-| 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `toko@contoh.com` |
+| 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email)
 | 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
 | 3 | Set secret Actions `PORTAL_VERCEL_URL = https://pos-amd.vercel.app` | `Settings → Secrets → Actions` |
 | 4 | Re-run workflow "Build Desktop Windows" (atau push tag `v1.0.1`) | `.exe` dari tag `v1.0.0` masih memakai URL placeholder `kasirpro-portal.vercel.app` — perlu rebuild agar menempelkan domain asli |

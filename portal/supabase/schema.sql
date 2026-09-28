@@ -20,6 +20,8 @@ create table if not exists public.partners (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid unique references auth.users(id) on delete cascade,
   email           text unique,
+  -- nama pengguna untuk login (username & password), unik per toko
+  username        text,
   nama_toko       text        not null,
   no_hp           text,
   alamat          text,
@@ -37,10 +39,26 @@ create table if not exists public.partners (
 
 -- migrasi aman untuk database lama
 alter table public.partners add column if not exists email text;
+alter table public.partners add column if not exists username text;
 alter table public.partners add column if not exists komisi_total integer not null default 0;
 alter table public.partners add column if not exists status text not null default 'active';
 create unique index if not exists uq_partners_email on public.partners (email) where email is not null;
+create unique index if not exists uq_partners_username on public.partners (username) where username is not null;
 create index if not exists idx_partners_user on public.partners (user_id);
+
+-- Isi username untuk baris lama yang belum punya (default = bagian email sebelum "@",
+-- dipastikan unik dengan menambahkan -2, -3, … pada bentrok).
+update public.partners set username = x.username
+from (
+  select id, coalesce(username, first_value(lower(split_part(coalesce(email,''),'@',1)))
+                 over (partition by lower(split_part(coalesce(email,''),'@',1)) order by created_at)) ||
+         case when row_number() over (partition by lower(split_part(coalesce(email,''),'@',1)) order by created_at) = 1
+              then '' else row_number() over (partition by lower(split_part(coalesce(email,''),'@',1)) order by created_at)::text end
+         as username
+  from public.partners
+  where username is null
+) x
+where public.partners.id = x.id;
 
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -149,15 +167,24 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 4. Auto-create baris partner saat akun toko dibuat di Supabase Auth
---    (nama toko default = bagian email sebelum "@", kuota 5)
+--    (nama toko & username default dari user_metadata atau email sebelum "@",
+--    kuota 5)
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_username text;
 begin
-  insert into public.partners (user_id, email, nama_toko, license_quota, total_terjual, komisi_total)
+  v_username := nullif(btrim(coalesce(new.raw_user_meta_data ->> 'username', '')), '');
+  if v_username is null then
+    v_username := lower(split_part(coalesce(new.email, ''), '@', 1));
+  end if;
+
+  insert into public.partners (user_id, email, username, nama_toko, license_quota, total_terjual, komisi_total)
   values (
     new.id,
     new.email,
+    v_username,
     coalesce(new.raw_user_meta_data ->> 'nama_toko', split_part(coalesce(new.email, ''), '@', 1)),
     5, 0, 0
   )

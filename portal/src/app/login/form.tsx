@@ -3,17 +3,19 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, LogIn, Store } from 'lucide-react';
+import { AlertCircle, Loader2, LogIn, Sparkles, Store, User } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
-import { createClient } from '@/lib/supabase/client';
+
+/** Informasi akun demo yang selalu ditampilkan di halaman login. */
+const DEMO_USER = { username: 'demo', password: 'toko12345' };
 
 export default function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const [email, setEmail] = React.useState('');
+  const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPass, setShowPass] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -25,25 +27,22 @@ export default function LoginForm() {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
-      setError('Email toko dan password wajib diisi.');
+    if (!username.trim() || !password) {
+      setError('Username dan password wajib diisi.');
       return;
     }
 
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
       });
 
-      if (authError) {
-        setError(
-          authError.message.toLowerCase().includes('invalid')
-            ? 'Email atau password salah.'
-            : authError.message,
-        );
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.message || 'Gagal masuk. Coba lagi.');
         return;
       }
 
@@ -55,6 +54,12 @@ export default function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function fillDemo() {
+    setUsername(DEMO_USER.username);
+    setPassword(DEMO_USER.password);
+    setError(null);
   }
 
   return (
@@ -77,25 +82,25 @@ export default function LoginForm() {
       <div className="mb-8">
         <h1 className="text-[26px] font-bold leading-snug">Masuk ke Toko Anda</h1>
         <p className="mt-1.5 text-[14px] text-zinc-500">
-          Gunakan email &amp; password yang diberikan admin.
+          Gunakan username &amp; password yang diberikan admin.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field label="Email Toko" htmlFor="email">
+        <Field label="Username" htmlFor="username">
           <div className="relative">
-            <Store className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <Input
-              id="email"
-              type="email"
-              inputMode="email"
+              id="username"
+              type="text"
+              inputMode="text"
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
-              placeholder="toko@email.com"
+              placeholder="demo atau email toko"
               className="pl-10"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
         </Field>
@@ -134,11 +139,36 @@ export default function LoginForm() {
         </Button>
       </form>
 
+      <div className="my-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <p className="flex items-center gap-1.5 text-[12px] font-bold text-amber-800">
+          <Sparkles className="h-3.5 w-3.5" />
+          Akun Demo — coba langsung
+        </p>
+        <div className="mt-2 space-y-1 text-[12px] text-amber-900">
+          <p>
+            Username: <span className="font-mono font-semibold">{DEMO_USER.username}</span>
+          </p>
+          <p>
+            Password: <span className="font-mono font-semibold">{DEMO_USER.password}</span>
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={fillDemo}
+          className="mt-3 rounded-lg bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white active:scale-[.98]"
+        >
+          Isi otomatis
+        </button>
+      </div>
+
       <div className="mt-auto rounded-2xl bg-zinc-50 p-4">
-        <p className="text-[12px] font-semibold text-zinc-700">Belum punya akun?</p>
+        <p className="text-[12px] font-semibold text-zinc-700">
+          <Store className="mr-1 inline h-3.5 w-3.5 text-zinc-400" />
+          Belum punya akun?
+        </p>
         <p className="mt-1 text-[12px] leading-relaxed text-zinc-500">
-          Akun toko dibuat oleh admin. Hubungi admin untuk memperoleh Email Toko, password, dan
-          jatah lisensi awal.
+          Akun toko dibuat oleh admin. Hubungi admin untuk memperoleh username, password, dan jatah
+          lisensi awal.
         </p>
       </div>
     </main>

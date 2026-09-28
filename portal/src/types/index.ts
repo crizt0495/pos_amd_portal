@@ -24,6 +24,7 @@ export interface Partner {
   id: string;
   user_id: string | null;
   email: string | null;
+  username: string | null;
   nama_toko: string;
   no_hp: string | null;
   alamat: string | null;
