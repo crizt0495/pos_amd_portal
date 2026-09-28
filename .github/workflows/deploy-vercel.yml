@@ -47,6 +47,18 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Periksa VERCEL_TOKEN
+        id: check
+        env:
+          TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -n "$TOKEN_VALUE" ] && [ "$TOKEN_VALUE" != "null" ]; then
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+            echo "VERCEL_TOKEN tersedia — deploy akan dijalankan."
+          else
+            echo "VERCEL_TOKEN belum di-set — deploy di-skip. Baca README bagian 'Cara deploy'."
+          fi
+
       - name: Deploy ke Vercel (production)
-        if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_TOKEN != 'null' }}
+        if: steps.check.outputs.ready == 'yes'
         run: npx --yes vercel deploy --prod --yes
