@@ -441,27 +441,46 @@ lokal — sudah dieksekusi dan **semua lulus** sebelum repo ini di-push (circle 
 
 ### Portal ke Vercel
 
+Deploy sudah **selesai dan terverifikasi live** pada `https://pos-amd.vercel.app`.
+Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
+
+- **Root Directory**: `portal`  (`"projectSettings": { "rootDirectory": "portal" }`)
+- Framework preset: **Next.js**
+- Env vars (production/preview/development): `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
+  `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_NAME`
+
+Untuk proyek baru / re-import:
+
 ```bash
-cd portal
-npx vercel            # preview
-npx vercel --prod     # produksi
+git push origin main     # Git integration: Vercel otomatis build (root = portal)
+# atau deploy manual dari CLI:
+cd portal && npx vercel --prod
 ```
 
-- **Root Directory** saat import repo: `portal`
-- Framework preset: **Next.js** (auto terdeteksi)
-- Environment variables: samakan dengan `.env.example` (bagian 1.3)
+`.vercelignore` di root repo mencegah file berat (node_modules, dist, release,
+.next) ikut terunggah ke Vercel.
+
+Hasil verifikasi terhadap domain produksi (tidak pakai localhost sama sekali):
+
+- `GET /  → 307 → /login` | `/login` 200 | `/manifest.json` 200 |
+  `/icons/icon-192.png` 200 | `/sw.js` 200
+- Round-trip API penuh (login → generate → aktivasi → mismatch → profil → logo):
+  **30/30 lulus**
+- Kontrak desktop asli melawan `https://pos-amd.vercel.app`: **17/17 lulus**
 
 ### Desktop ke Windows
 
 ```bash
 cd desktop
-npm run set-portal -- https://domain-anda.vercel.app
+npm run set-portal -- https://pos-amd.vercel.app
 npm run dist:win
 ```
 
 atau pakai `.github/workflows/build-desktop.yml` (run manual dari tab Actions).
-Setelah portal online, **pastikan dulu** aktivasi nyata berhasil sebelum
-membagikan installer ke pengguna.
+Agar installer memakai domain yang benar, set secret Actions
+`PORTAL_VERCEL_URL = https://pos-amd.vercel.app` lalu Re-run workflow (atau
+push tag `v1.0.1`) — hasil `.exe` diunduh sebagai artifact.
 
 ---
 
@@ -488,6 +507,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | `portal`: `next build` | sukses (12 route, service worker ke `public/sw.js`) |
 | `portal`: `check:supabase` | **hijau semua** (env, kunci, tabel, 4 RPC, bucket, toko terdaftar) |
 | `portal`: round-trip API asli vs Supabase (login GoTrue → generate key → komisi tier → aktivasi → ALREADY_ACTIVE → HWID_MISMATCH → INVALID_KEY → profil → upload logo → kuota/komisi) | **30/30 lulus** |
+| `portal`: **deploy Vercel live** — `https://pos-amd.vercel.app` (login, PWA manifest/icon/sw, generate, aktivasi, HWID mismatch, profil, logo) | **round-trip 30/30 + rute PWA 200** |
 | `desktop`: `npm install` | 493 paket, `better-sqlite3` di-rebuild untuk Electron 34.5.8 |
 | `desktop`: `tsc --noEmit` | bersih |
 | `desktop`: `vite build` | sukses (~210 kB JS + 25 kB CSS, tanpa warning) |
@@ -497,8 +517,10 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | `desktop`: e2e headless — CRUD produk, transaksi + potong stok, void + restore stok, laporan, 4 tab UI, screenshot | semua lulus |
 | `desktop`: kontrak `/api/activate` — 26 uji semua kode server | semua lulus |
 | `desktop`: UI aktivasi + HWID mismatch + aplikasi ter-copy → layar terkunci | semua lulus |
-| `desktop`: kontrak live ke portal lokal (`license.js` asli + HWID `node-machine-id` → `KPRO-DEMO-…`) | **17/17 lulus** |
+| `desktop`: kontrak live ke **Vercel** (`license.js` asli + HWID `node-machine-id` → `https://pos-amd.vercel.app`) | **17/17 lulus** |
 | `desktop`: `electron-builder --win --dir` | sukses (asar + `better_sqlite3.node` ter-unpack) |
+| **GitHub Actions CI** | **passing** (typecheck portal+desktop, build, tes statis, SQLite, HWID) |
+| **GitHub Actions Build Desktop Windows (tag `v1.0.0`)** | **success** (installer NSIS diunduh sebagai artifact) |
 | **`npm test` (keseluruhan)** | **36/36 lulus** |
 
 ### 8.1 Yang hanya bisa dilakukan operator
@@ -506,10 +528,10 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | # | Langkah | Catatan |
 | --- | --- | --- |
 | 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `toko@contoh.com` |
-| 2 | Deploy `portal` ke Vercel | butuh akun Vercel Anda; isi env sesuai `.env.example` |
-| 3 | Set secret Actions `PORTAL_VERCEL_URL` = domain Vercel Anda | `Settings → Secrets → Actions`; kalau kosong installer memakai placeholder `kasirpro-portal.vercel.app` |
-| 4 | Trigger build installer | sudah otomatis via push tag `v1.0.0`; atau Re-run workflow → download artifact `KasirPro-Setup-windows` |
-| 5 | Uji installer di komputer kasir nyata (Windows) | key demo `KPRO-DEMO-AAAA-0001` masih tersedia untuk aktivasi |
+| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
+| 3 | Set secret Actions `PORTAL_VERCEL_URL = https://pos-amd.vercel.app` | `Settings → Secrets → Actions` |
+| 4 | Re-run workflow "Build Desktop Windows" (atau push tag `v1.0.1`) | `.exe` dari tag `v1.0.0` masih memakai URL placeholder `kasirpro-portal.vercel.app` — perlu rebuild agar menempelkan domain asli |
+| 5 | Uji installer di komputer kasir nyata (Windows) | key demo `KPRO-DEMO-AAAA-0001` tersedia dan sudah terbukti aktivasi via Vercel |
 
 Setelah deploy, `npm run check:supabase` tetap **hijau** — itu tanda portal siap dipakai.
 
@@ -518,7 +540,7 @@ Setelah deploy, `npm run check:supabase` tetap **hijau** — itu tanda portal si
 - **Menjalankan** installer `.exe` NSIS hasil Actions di Windows sungguhan
   (build-nya otomatis jalan di runner Windows; verifikasi pemakaian akhir
   tetap butuh komputer Windows).
-- panggilan HTTP ke domain Vercel yang sudah live.
+- pembayaran/pengiriman key nyata (WhatsApp, dll) — alur manual operator.
 
 Keduanya di-*cover* runner: di Windows `npm test` otomatis menjalankan
 `npm run dist:win` dan memeriksa `.exe` hasilnya.

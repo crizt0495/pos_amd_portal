@@ -1,0 +1,14 @@
+# Apache VERBOSE deploy fiber — hanya unggah file yang benar-benar diperlukan
+# (memberi tahu Vercel CLI apa yang DILARANG diunggah; aturan mirip .gitignore)
+
+node_modules
+.next
+dist
+release
+.git
+.vercel
+.env*
+!*.env.example
+*.log
+*.tsbuildinfo
+.DS_Store
