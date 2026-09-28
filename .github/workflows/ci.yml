@@ -1,0 +1,58 @@
+# =============================================================================
+#  CI — typecheck + uji otomatis (Linux, tanpa butuh Windows/Supabase)
+# =============================================================================
+#  Jalankan otomatis setiap push, dan bisa dipicu manual dari tab Actions.
+#  Uji yang butuh Supabase/Windows hanya dilaporkan sebagai catatan, bukan
+#  menggagalkan build (lihat "Status verifikasi" di README).
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck + uji
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install portal
+        run: npm --prefix ./portal install
+
+      - name: Install desktop
+        run: npm --prefix ./desktop install
+
+      - name: Typecheck portal
+        run: npm --prefix ./portal run typecheck
+
+      - name: Build portal
+        run: npm --prefix ./portal run build
+
+      - name: Typecheck + build desktop
+        run: npm --prefix ./desktop run build
+
+      - name: Uji statis + SQLite + HWID
+        run: |
+          node tools/test/run-all.mjs statis
+          cd desktop
+          ELECTRON_RUN_AS_NODE=1 xvfb-run -a ./node_modules/electron/dist/electron ../tools/test/db-smoke.js
+          ELECTRON_RUN_AS_NODE=1 xvfb-run -a ./node_modules/electron/dist/electron ../tools/test/hwid-smoke.js

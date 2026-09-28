@@ -1,0 +1,152 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/supabase/guard';
+import { generateSerialKey } from '@/lib/serial';
+import type { GenerateLicenseResponse, License } from '@/types';
+
+/**
+ * POST /api/licenses
+ * Dipakai form "Aktivasi" untuk membuat Serial Key baru.
+ * Perhitungan kuota + tier dilakukan RPC `generate_license` (atomic, anti race-condition).
+ */
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const BodySchema = z.object({
+  nama: z.string().trim().min(2, 'Nama pembeli terlalu pendek').max(80),
+  telepon: z
+    .string()
+    .trim()
+    .min(8, 'Nomor telepon tidak valid')
+    .max(20)
+    .regex(/^[0-9+\-\s]+$/, 'Nomor telepon tidak valid'),
+  alamat: z.string().trim().min(3, 'Alamat wajib diisi').max(240),
+  paket: z.enum(['bundle', 'app_only']),
+  tipe: z.enum(['sekali', 'langganan']),
+});
+
+export async function POST(req: Request) {
+  const auth = await requireAuth();
+  if ('error' in auth) {
+    return NextResponse.json<GenerateLicenseResponse>(
+      { ok: false, message: auth.error },
+      { status: auth.status },
+    );
+  }
+
+  const supabase = createClient();
+
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json<GenerateLicenseResponse>(
+      { ok: false, message: 'Body JSON tidak valid.' },
+      { status: 400 },
+    );
+  }
+
+  const parsed = BodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json<GenerateLicenseResponse>(
+      { ok: false, message: parsed.error.issues[0]?.message ?? 'Data tidak valid.' },
+      { status: 422 },
+    );
+  }
+
+  const { nama, telepon, alamat, paket, tipe } = parsed.data;
+
+  // 5 percobaan bila serial key kebetulan bentrok (sangat jarang, tapi tetap aman)
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const serialKey = generateSerialKey();
+
+    const { data, error } = await supabase.rpc('generate_license', {
+      p_serial_key: serialKey,
+      p_pembeli_nama: nama,
+      p_pembeli_hp: telepon,
+      p_alamat: alamat,
+      p_paket_type: paket,
+      p_license_type: tipe,
+    });
+
+    if (error) {
+      const msg = error.message ?? '';
+
+      if (msg.includes('QUOTA_EXHAUSTED')) {
+        return NextResponse.json<GenerateLicenseResponse>(
+          { ok: false, message: 'Sisa kuota lisensi toko Anda habis. Hubungi admin untuk topup.' },
+          { status: 403 },
+        );
+      }
+      if (msg.includes('PARTNER_NOT_FOUND')) {
+        return NextResponse.json<GenerateLicenseResponse>(
+          { ok: false, message: 'Data toko tidak ditemukan. Hubungi admin.' },
+          { status: 403 },
+        );
+      }
+      if (/generate_license|PGRST202/i.test(msg)) {
+        return NextResponse.json<GenerateLicenseResponse>(
+          {
+            ok: false,
+            message:
+              'Fungsi generate_license belum ada di database. Jalankan portal/supabase/schema.sql di Supabase SQL Editor.',
+          },
+          { status: 500 },
+        );
+      }
+      if (error.code === '23505') continue; // serial key bentrok -> generate ulang
+
+      return NextResponse.json<GenerateLicenseResponse>(
+        { ok: false, message: `Gagal membuat Serial Key: ${msg}` },
+        { status: 500 },
+      );
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as License | null;
+    if (!row) continue;
+
+    const { data: after } = await supabase
+      .from('partners')
+      .select('license_quota')
+      .eq('id', auth.user.partner!.id)
+      .maybeSingle();
+
+    return NextResponse.json<GenerateLicenseResponse>({
+      ok: true,
+      message: 'Serial Key berhasil dibuat.',
+      license: row as License,
+      quota: (after?.license_quota as number) ?? 0,
+      tier: row.tier,
+      komisi: Number(row.komisi_amount ?? 0),
+    });
+  }
+
+  return NextResponse.json<GenerateLicenseResponse>(
+    { ok: false, message: 'Gagal membuat Serial Key unik. Coba lagi.' },
+    { status: 500 },
+  );
+}
+
+/** GET /api/licenses — daftar key toko (dipakai debugging / daftar seller). */
+export async function GET() {
+  const auth = await requireAuth();
+  if ('error' in auth) {
+    return NextResponse.json({ ok: false, message: auth.error }, { status: auth.status });
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('licenses')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, licenses: data ?? [] });
+}

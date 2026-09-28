@@ -1,0 +1,96 @@
+# =============================================================================
+#  Build installer Windows KasirPro Desktop
+# =============================================================================
+#  Dipakai karena paket NSIS hanya bisa dirakit di OS Windows
+#  (electron-builder butuh rcedit/signtool.exe).
+#
+#  Cara pakai:
+#   1. Push repo ini ke GitHub
+#   2. Buka tab "Actions" > "Build Desktop Windows" > "Run workflow"
+#   3. Download artifact "KasirPro-Setup-windows" (file .exe di dalamnya)
+#
+#  Agar hasil build memakai domain portal yang benar, set secret:
+#   Settings > Secrets and variables > Actions > New repository secret
+#     PORTAL_VERCEL_URL  = https://domain-anda.vercel.app
+#  Kalau secret tidak diisi, dipakai nilai bawaan di desktop/electron/config.js
+# =============================================================================
+name: Build Desktop Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      portal_url:
+        description: 'URL portal Vercel untuk aktivasi (kosongkan = pakai secret/default)'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: NSIS x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Tentukan URL portal
+        id: portal
+        shell: pwsh
+        env:
+          FROM_INPUT: ${{ inputs.portal_url }}
+          FROM_SECRET: ${{ secrets.PORTAL_VERCEL_URL }}
+        run: |
+          $url = if ($env:FROM_INPUT) { $env:FROM_INPUT }
+                 elseif ($env:FROM_SECRET) { $env:FROM_SECRET }
+                 else { '' }
+          if (-not $url) {
+            Write-Host '::warning::PORTAL_VERCEL_URL kosong - memakai nilai bawaan electron/config.js (PASTIKAN domain Vercel sudah benar!)'
+          } else {
+            Write-Host "Portal URL untuk build: $url"
+          }
+          "url=$url" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Tulis konfigurasi build
+        if: steps.portal.outputs.url != ''
+        working-directory: desktop
+        run: npm run set-portal -- ${{ steps.portal.outputs.url }}
+
+      - name: Typecheck
+        working-directory: desktop
+        run: npm run typecheck
+
+      - name: Build renderer + installer
+        working-directory: desktop
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Unggah installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: KasirPro-Setup-windows
+          path: desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 30

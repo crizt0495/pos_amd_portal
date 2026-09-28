@@ -1,32 +1,42 @@
-# deps
+# ---- deps ----
 node_modules/
 .pnp
 .pnp.js
 
-# next
-.next/
-out/
-build/
-next-env.d.ts
-*.tsbuildinfo
+# ---- portal (Next.js) ----
+portal/.next/
+portal/out/
+portal/next-env.d.ts
+portal/.vercel
+portal/*.tsbuildinfo
 
-# electron
-release/
-dist/
+# service worker PWA hasil generate next-pwa saat `next build`
+portal/public/sw.js
+portal/public/sw.js.map
+portal/public/workbox-*.js
+portal/public/workbox-*.js.map
+portal/public/fallback-*.js
 
-# env
+# ---- desktop (Electron + Vite) ----
+desktop/dist/
+desktop/release/
+desktop/*.tsbuildinfo
+desktop/build/icon.ico
+
+# konfigurasi portal yang ditempel saat build (isi sendiri, jangan commit)
+desktop/electron/build-config.json
+
+# ---- env ----
 .env
 .env.local
 .env*.local
+desktop/.env
 
-# misc
+# ---- misc ----
 .DS_Store
 *.pem
+Thumbs.db
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-.vercel
+pnpm-debug.log*
 *.log
-
-# generated supabase types
-src/types/supabase.generated.ts

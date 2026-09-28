@@ -1,117 +1,522 @@
-# KasirPro
+# KasirPro — Monorepo
 
-Aplikasi POS (Point of Sale) kasir *fullstack* berbasis **Next.js 14 (App Router)** dan **Electron**. Dibangun khusus untuk skenario offline-first dengan sistem aktivasi lisensi berbasis Hardware ID (HWID).
+Dua produk yang **sengaja dipisah total**. Tidak ada satu baris kode pun yang dipakai
+bersama antara keduanya.
 
-## Fitur Utama
+| Project | Stack | Untuk siapa | Data |
+| --- | --- | --- | --- |
+| [`portal/`](./portal) | Next.js 14 (App Router) + Supabase + Tailwind + PWA, deploy **Vercel** | **Operator toko** (pembeli Serial Key) | PostgreSQL **Supabase** (cloud) |
+| [`desktop/`](./desktop) | Electron + React + Vite + **better-sqlite3**, build **.exe NSIS** | **Pembeli akhir** (pemilik toko yang pakai kasir) | **SQLite lokal, 100% offline** |
 
-- **Offline-First**: Semua transaksi dan produk disimpan secara lokal di browser/perangkat menggunakan [Dexie.js](https://dexie.org/) (IndexedDB). Aplikasi bisa berjalan sepenuhnya tanpa internet.
-- **Hardware-Locking**: Lisensi diikat ke identitas fisik perangkat (Motherboard/BIOS UUID) via `node-machine-id` saat berjalan di Electron. Mencegah duplikasi atau pencurian lisensi dengan cara *copy-paste* folder aplikasi.
-- **Cloud Sync**: Sinkronisasi latar belakang otomatis ke Supabase (PostgreSQL) saat perangkat kembali *online*.
-- **Role-Based Access (RLS)**:
-  - **Super Admin**: Mengatur stok lisensi, memantau *partner*, dan merekap keuangan.
-  - **Partner (Toko Komputer)**: Membeli kuota lisensi dari admin, mengaktifkan lisensi untuk pembeli, dan mengelola toko pelanggan.
-  - **Kasir (Client)**: Menggunakan aplikasi murni secara *offline*, diaktivasi menggunakan *Serial Key*.
-- **Dukungan Printer Thermal 58mm**: Mencetak struk lokal melalui `node-thermal-printer` menggunakan protokol ESC/POS langsung dari Electron, atau melalui fitur *print browser* (fallback).
-
----
-
-## Prasyarat
-
-- **Node.js**: `v18.17.0` atau yang lebih baru (disarankan `v20`).
-- **Supabase**: Proyek Supabase aktif (untuk sinkronisasi *cloud* dan autentikasi admin/partner).
-
----
-
-## Konfigurasi Lingkungan
-
-Aplikasi ini membutuhkan dua jenis berkas `.env` karena arsitektur Next.js Standalone + Electron.
-
-### 1. `.env.local` (Digunakan saat masa pengembangan - `npm run dev`)
-Buat berkas `.env.local` di *root* proyek (atau cukup ubah nama `.env.example` lalu isi nilainya):
-
-```ini
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5c...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5c...
+```
+pos_amd/
+├── portal/                # PWA operator  -> generate serial key, komisi, profil
+│   ├── src/app/           # (login) (app) api/activate api/licenses api/profile
+│   ├── supabase/          # schema.sql (wajib) + seed.sql (opsional)
+│   ├── scripts/           # check-supabase.mjs, create-demo-user.mjs
+│   └── .env.example
+├── desktop/               # Aplikasi kasir offline -> SQLite, aktivasi 1x online
+│   ├── electron/          # main.js preload.js ipc.js db.js license.js hwid.js thermal.js config.js
+│   ├── src/screens/       # Activation Kasir Produk Laporan
+│   └── .env.example
+├── tools/test/            # seluruh skrip uji (dijalankan dengan `npm test`)
+└── package.json           # helper script monorepo
 ```
 
-### 2. `.env.production` (Digunakan di paket produksi - `KasirPro.exe`)
-Buat berkas `.env.production` dengan format yang sama seperti `.env.local`. Berkas ini **harus** ada sebelum menjalankan `npm run build:exe`. Skrip pembangunan (*build*) akan menyertakan berkas ini ke dalam bundel `.exe` agar *main process* Electron dapat membaca `SUPABASE_SERVICE_ROLE_KEY` pada *runtime*.
+Pemisahannya tegas: **tidak ada fitur yang bercampur.**
+
+- Portal **tidak** tahu apa itu kasir, keranjang, struk, atau produk.
+- Desktop **tidak** tahu apa itu komisi, tier, dashboard, atau partner. Desktop hanya
+  mengirim `serial_key` + `hwid` ke `POST /api/activate` milik portal.
+- Satu-satunya jembatan keduanya adalah **satu endpoint HTTP** (lihat [Kontrak API](#3-kontrak-api-aktivasi)).
 
 ---
 
-## Inisialisasi Database (Supabase)
+## Daftar isi
 
-1. Buka *dashboard* Supabase proyek Anda.
-2. Masuk ke menu **SQL Editor**.
-3. Buka dan salin seluruh isi berkas `supabase/schema.sql` dari *repository* ini.
-4. Jalankan (*Run*) kueri tersebut. Kueri ini sepenuhnya *idempotent* (aman dijalankan ulang) dan akan membuat semua tabel, indeks, kebijakan RLS, serta fungsi RPC yang dibutuhkan KasirPro.
-
-### Membuat Akun Super Admin
-
-Setelah skema dibuat, Anda perlu mempromosikan pengguna pertama menjadi Super Admin:
-1. Daftar (*Sign Up*) melalui halaman `/login` aplikasi KasirPro, **ATAU** buat *user* baru melalui *dashboard* Supabase Auth.
-2. Di SQL Editor Supabase, jalankan:
-   ```sql
-   UPDATE public.profiles
-   SET role = 'super_admin'
-   WHERE email = 'email-anda@domain.com';
-   ```
+1. [Portal (PWA di Vercel)](#1-portal-pwa-di-vercel)
+2. [Desktop (Aplikasi Kasir Offline)](#2-desktop-aplikasi-kasir-offline)
+3. [Kontrak API aktivasi](#3-kontrak-api-aktivasi)
+4. [Perintah monorepo](#4-perintah-monorepo-dari-root)
+5. [Uji seluruh aplikasi](#5-uji-seluruh-aplikasi)
+6. [Cara deploy](#6-cara-deploy)
+7. [Alur bisnis singkat](#7-alur-bisnis-singkat)
+8. [Status verifikasi](#8-status-verifikasi)
+9. [Catatan keamanan](#9-catatan-keamanan)
 
 ---
 
-## Skrip yang Tersedia
+## 1. Portal (PWA di Vercel)
 
-### Masa Pengembangan (*Development*)
+PWA **mobile only**: `max-w-[430px]` di tengah, background putih, Bottom Nav tetap
+3 menu: **Home | Aktivasi | Profile**.
+
+### 1.1 Yang bisa dilakukan operator
+
+| Menu | Isi |
+| --- | --- |
+| **Home** | Header `Home` + `Nama Toko ->` + ikon logout. Kartu 3 kolom `[sisa/jatah Sisa] [n Bundle] [n Aplikasi]`, kartu hitam **Total Komisi**, daftar **Riwayat Komisi** (baris 1: tanggal - paket - nama konsumen, baris 2 kanan: nominal komisi) |
+| **Aktivasi** | Judul **Generate Serial Key**. Form: Nama, Telepon, Alamat, Pilih Paket (Bundle / Aplikasi Saja), Pilih Pilihan (Sekali / Langganan), tombol hitam **Generate Key**. Sukses → modal **Selamat Generate Key Berhasil** + kode + `Silahkan aktivasi ke Komputer Kasir` + tombol **Copy & Tutup** |
+| **Profile** | Upload **Logo Toko** (Supabase Storage), Nama Toko, No HP, Alamat. Section **Penghargaan Title**: 4 mahkota Bronze/Silver/Gold/Platinum, yang aktiffull opacity, lainnya 30% |
+
+Kartu Home:
+- `sisa/jatah` = `license_quota` / (`license_quota` + `total_terjual`) → awal `5/5`, habis 1 key jadi `4/5`
+- `n Bundle` = jumlah `licenses.paket_type = 'bundle'`
+- `n Aplikasi` = jumlah `licenses.paket_type = 'app_only'`
+
+Tingkat penghargaan (dipakai untuk menghitung komisi):
+
+| Tier | Jumlah terjual | Rate komisi |
+| --- | --- | --- |
+| Bronze | 1–5 | 5% |
+| Silver | 6–10 | 10% |
+| Gold | 11–30 | 20% |
+| Platinum | 30+ | 30% |
+
+Komisi dasar: **Bundle Rp 100.000**, **Aplikasi Saja Rp 50.000** — dikali rate tier, lalu
+di-*snapshot* ke kolom `licenses.komisi_amount` saat key dibuat (jadi riwayat tidak berubah
+retroactive saat toko naik tier).
+
+### 1.2 Struktur database
+
+```sql
+partners(
+  id uuid, user_id uuid -> auth.users, email text unique,
+  nama_toko text, no_hp text, alamat text, logo_url text,
+  license_quota int default 5,   -- sisa jatah
+  total_terjual int default 0,  -- dasar tier
+  komisi_total int, status text, created_at, updated_at
+)
+
+licenses(
+  id uuid, serial_key text unique, partner_id uuid -> partners,
+  status text default 'unused',        -- unused | active | blocked | revoked
+  hwid_locked text, hwid_locked_at, device_name, app_version, activated_at,
+  paket_type text,                     -- bundle | app_only
+  license_type text,                   -- sekali | langganan
+  pembeli_nama text, pembeli_hp text, alamat text,
+  komisi_amount int, tier text, tier_rate numeric,
+  expires_at, created_at, updated_at
+)
+```
+
+> Password **tidak** disimpan di `partners`. Kredensial dimiliki **Supabase Auth**
+> (`auth.users.encrypted_password`); `partners.email` hanya salinan untuk dicari admin.
+> Menyalin hash password ke tabel sendiri justru memperbesar risiko kebocoran.
+
+### 1.3 Setup
 
 ```bash
-# Menjalankan Next.js saja di browser (Mode Web)
-npm run dev
-
-# Menjalankan Next.js + jendela Electron (Mode Desktop)
-npm run electron:dev
+cd portal
+npm install
+cp .env.example .env.local     # isi kuncinya
+npx tsc --noEmit               # cek tipe
+npm run dev                    # http://localhost:3000
 ```
-> *Catatan: Akses fitur `node-machine-id` (pembacaan HWID asli) dan `node-thermal-printer` (cetak ESC/POS) hanya berfungsi saat menjalankan `npm run electron:dev`.*
 
-### Pemaketan Produksi (*Build*)
+Isi `.env.local`:
 
 ```bash
-# Membuat installer KasirPro-Setup.exe (Windows)
-npm run build:exe
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # gaya baru (recommended)
+SUPABASE_SECRET_KEY=sb_secret_...                          # gaya baru, server only
 
-# Membuat executable AppImage (Linux)
-npm run build:linux
+# alias yang juga dibaca:
+#   SUPABASE_URL  (ganti NEXT_PUBLIC_SUPABASE_URL)
+#   SERVICE_KEY   (ganti SUPABASE_SECRET_KEY)
+# kunci JWT gaya lama:
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+#   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_APP_NAME=KasirPro Portal
 ```
-**Perhatian:** 
-Proses `build:exe` secara otomatis akan menjalankan `next build` (menghasilkan bundel *standalone*), menjalankan skrip `prepare-standalone.mjs`, lalu mengemasnya menggunakan `electron-builder`. 
 
-Hasil pemaketan akan disimpan di folder `release/`.
+### 1.4 Database Supabase
 
----
+1. Buka **Supabase Dashboard → SQL Editor → New query**
+2. Tempel seluruh isi [`portal/supabase/schema.sql`](./portal/supabase/schema.sql) → **Run**
 
-## Arsitektur & Sinkronisasi
+Schema itu membuat: tabel `partners` & `licenses`, function `generate_license()` /
+`activate_license()`, RLS per-partner, storage bucket `store-logos`, dan trigger
+`on_auth_user_created` (auto buat baris `partners` begitu user dibuat, kuota 5).
+Aman dijalankan berulang (idempotent) dan sudah termasuk migrasi kolom versi lama.
 
-1. **Pembuatan Transaksi (Offline)**
-   Setiap kali transaksi baru selesai, transaksi tersebut ditulis terlebih dulu ke dalam `dexie` (`kasirpro_local`) dengan penanda `_dirty = 1`.
-2. **Mesin Sinkronisasi**
-   Setiap 30 detik (atau ketika koneksi jaringan pulih), *sync engine* akan:
-   - Mengambil data transaksi dengan `_dirty = 1` dari basis data lokal.
-   - Mengirimkannya ke titik akhir `/api/pos/sync` bersama dengan `Serial Key` dan `HWID`.
-   - Mengubah tanda `_dirty = 0` apabila pengiriman berhasil.
-3. **Verifikasi perangkat**
-   Jika `HWID` yang dikirimkan oleh klien tidak cocok dengan `hwid_locked` yang ada di Supabase, *server* akan menolak sinkronisasi (mencegah *clone* instalasi). Lisensi harus diputuskan (*Deactivate*) lebih dulu melalui panel Super Admin atau Partner agar perangkat baru dapat memakai `Serial Key` tersebut.
+Opsional — data contoh untuk mencoba semua tampilan:
+[`portal/supabase/seed.sql`](./portal/supabase/seed.sql).
 
----
+3. Buat akun toko di **Supabase → Authentication → Users → Add user**
+   (centang **Auto Confirm User**) — baris `partners` dibuat otomatis oleh trigger.
+   Dari CLI bisa langsung:
 
-## Mengelola Tipe Data (*Typings*) Supabase
-
-Setiap kali Anda mengubah skema basis data di Supabase secara mandiri, jangan lupa memperbarui berkas *typing* agar TypeScript tetap sejalan:
 ```bash
-npm run supabase:types
+cd portal && npm run seed:user    # baca .env.local, buat toko@contoh.com / toko12345
+node scripts/create-demo-user.mjs --email a@b.co --password rahasia --nama "Toko Saya"
 ```
-*(Pastikan URL dan Kunci anon Supabase sudah diset pada `.env.local`)*
+
+   > **Jangan** insert `auth.users` manual lewat SQL: akun tanpa baris `auth.identities`
+   > membuat login gagal dengan 500 "Database error querying schema". Buat lewat
+   > dashboard / endpoint admin saja.
+
+4. Topup kuota + nama toko:
+
+```sql
+update public.partners
+   set nama_toko = 'Toko Berkah', no_hp = '08123456789',
+       alamat = 'Jl. Merdeka No. 10', license_quota = 10
+ where email = 'toko@contoh.com';
+```
+
+5. Pastikan semuanya siap:
+
+```bash
+cd portal && npm run check:supabase
+```
+
+Skrip itu menguji env, kunci, tabel, 4 RPC, bucket storage, dan daftar toko — lalu
+memberi tahu persis apa yang masih kurang.
+
+### 1.5 PWA
+
+`@ducanh2912/next-pwa` menghasilkan service worker otomatis saat `next build`
+(`public/sw.js` — sudah masuk `.gitignore` karena hasil generate). Manifest ada di
+`portal/public/manifest.json` dan sengaja tidak ditimpa plugin lewat
+`buildExcludes: [/manifest\.json$/]`. Icon dibuat tanpa dependensi: `npm run icons`.
 
 ---
 
-## Hak Cipta
-Copyright © 2026 KasirPro. All rights reserved.
+## 2. Desktop (Aplikasi Kasir Offline)
+
+### 2.1 Yang bisa dilakukan kasir
+
+| Layar | Isi |
+| --- | --- |
+| **Aktivasi** | Input `KPRO-XXXX-XXXX-XXXX`, tampilkan HWID perangkat, aktivasi online 1x, tampilan **TERKUNCI** merah bila HWID beda |
+| **Kasir** | Scan barcode / cari produk, keranjang, qty, diskon (%/Rp), metode bayar, hitung kembalian, cetak struk |
+| **Produk** | CRUD produk, barcode, harga modal, stok (+/- cepat), peringatan stok menipis, tes printer |
+| **Laporan** | Rentang tanggal, omzet/laba/transaksi/item, grafik omzet harian, produk terlaris, metode bayar, riwayat transaksi, detail, **batalkan transaksi**, cetak ulang struk |
+
+### 2.2 Offline 100%
+
+- Database: `better-sqlite3` → **`<userData>/kasir.db`**
+  (Windows: `%APPDATA%\KasirPro\kasir.db`, macOS: `~/Library/Application Support/KasirPro/`, Linux: `~/.config/KasirPro/`)
+- Tabel: `products`, `transactions`, `transaction_items`, `app_license`, `settings`
+- Tidak ada koneksi internet setelah aktivasi. **Tidak ada kredensial Supabase di sisi ini.**
+- Migration memakai `PRAGMA user_version`, mode WAL, `foreign_keys ON`.
+
+### 2.3 Aktivasi & HWID lock
+
+```
+Desktop (main process)                Portal (Vercel)
+  1. baca HWID  ->  node-machine-id (UUID motherboard) dinormalisasi jadi 32 hex
+  2. POST /api/activate  ---------->  RPC activate_license()  (SECURITY DEFINER)
+       { serial_key, hwid }            - tidak ada            -> 404 INVALID_KEY
+                                         - status unused        -> active + kunci hwid (ACTIVATED)
+                                         - status active & sama -> 200 ALREADY_ACTIVE
+                                         - status active & beda -> 403 HWID_MISMATCH
+  3. simpan ke app_license  <---------  { ok, success, code, message, license{...} }
+  4. aplikasi offline selamanya
+```
+
+Setelah tersimpan, `check-license` hanya membandingkan **HWID lokal** — tanpa internet:
+
+| Code | Arti | Tampilan aplikasi |
+| --- | --- | --- |
+| `OK` | Lisensi valid | Masuk POS Kasir |
+| `NOT_ACTIVATED` | Belum pernah diaktivasi | Layar Aktivasi |
+| `HWID_MISMATCH` | Aplikasi disalin ke komputer lain | **TERKUNCI**, minta reset ke toko |
+| `EXPIRED` | Masa langganan habis | Peringatan di layar aktivasi |
+| `INVALID_KEY` / `BLOCKED` | Key salah / diblokir | Pesan error di form |
+| `NETWORK` / `TIMEOUT` | Tidak ada internet saat aktivasi | Wajib online 1x |
+
+### 2.4 Setup & jalan
+
+```bash
+cd desktop
+npm install                 # postinstall otomatis rebuild better-sqlite3 untuk Electron
+cp .env.example .env        # isi PORTAL_VERCEL_URL
+npm run dev                 # Vite + Electron (dev tools terbuka)
+npm run build               # typecheck + bundle renderer
+```
+
+`PORTAL_VERCEL_URL` dicari berurutan dari:
+
+1. `process.env.PORTAL_VERCEL_URL` (atau alias `VITE_API_URL`)
+2. `electron/build-config.json` — ditempel saat build, ikut ter-*pack* ke dalam `.exe`
+3. `<userData>/config.json` (`{"portalUrl": "..."}`) — bisa diubah pengguna
+4. `.env` di folder aplikasi
+5. nilai bawaan `DEFAULT_PORTAL_URL` di `electron/config.js`
+
+### 2.5 Build installer Windows
+
+Cara paling aman (URL portal ikut ter-*pack* ke dalam `.exe`):
+
+```bash
+cd desktop
+npm run set-portal -- https://domain-anda.vercel.app   # menulis electron/build-config.json
+npm run dist:win        # -> release/KasirPro-Setup-1.0.0.exe   (NSIS, x64)
+```
+
+Alternatif tanpa Windows — pakai GitHub Actions
+(`.github/workflows/build-desktop.yml`): **Actions → Build Desktop Windows → Run workflow**,
+hasil `.exe` bisa diunduh sebagai artifact.
+
+> **Penting:** paket NSIS hanya bisa dirakit di **Windows**, atau di Linux/macOS yang punya
+> `wine` terpasang (electron-builder memakai `rcedit`/`signtool.exe` untuk menancapkan icon &
+> versi ke dalam `.exe`). Di Linux tanpa wine, proses berhenti di tahap
+> `building target=nsis ... wine process failed ENOENT`.
+>
+> Yang **sudah terverifikasi** di Linux tanpa wine: `npm run typecheck`, `npm run build`
+> (bundle renderer), dan `electron-builder --win --dir` menghasilkan `release/win-unpacked`
+> berisi `KasirPro.exe` + `resources/app.asar` dengan
+> `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` di dalamnya.
+>
+> `better-sqlite3` sudah di-*rebuild* otomatis oleh `postinstall` (`electron-builder
+> install-app-deps`) dan di-`asarUnpack`, jadi komputer pengguna tidak butuh toolchain apa pun.
+
+### 2.6 Cetak struk thermal
+
+Dua jalur, otomatis pilih:
+
+1. **ESC/POS langsung** — bila `PRINTER_PORT` diisi **dan** paket opsional
+   `node-thermal-printer` terpasang: `192.168.1.10:9100`, `COM3`, `/dev/usb/lp0`
+2. **Dialog printer Windows** (bawaan, tanpa dependensi) — struk dirender HTML 58mm
+   lalu dicetak lewat `webContents.print()`
+
+Uji printer kapan saja dari **Produk → Tes Printer**.
+
+---
+
+## 3. Kontrak API aktivasi
+
+`POST https://<portal>/api/activate`
+
+**Request** (body `camelCase` juga diterima agar klien tidak pernah gagal karena format)
+
+```json
+{
+  "serial_key": "KPRO-ABCD-2345-6XYZ",
+  "hwid": "3F2A9C10B8D7E6F5A4B3C2D1E0F9A8B7C",
+  "device_name": "Windows DESKTOP-ABC Intel i5",
+  "app_version": "1.0.0"
+}
+```
+
+**Response sukses (200)**
+
+```json
+{
+  "ok": true,
+  "success": true,
+  "code": "ACTIVATED",
+  "message": "Serial Key berhasil diaktifkan dan terkunci ke perangkat ini.",
+  "license": {
+    "serial_key": "KPRO-ABCD-2345-6XYZ",
+    "partner_id": "…",
+    "nama_toko": "Toko Berkah",
+    "pembeli_nama": "Budi",
+    "paket_type": "bundle",
+    "license_type": "sekali",
+    "status": "active",
+    "hwid_locked": "3F2A…B7C",
+    "locked_now": true,
+    "activated_at": "2025-11-10T03:20:00.000Z",
+    "expires_at": null
+  },
+  "locked_hwid": null,
+  "server_time": "2025-11-10T03:20:00.000Z"
+}
+```
+
+`ok` dan `success` selalu sama — dua-duanya disediakan supaya klien versi mana pun bisa
+membacanya.
+
+**Response gagal** — bentuknya sama, `ok/success` = `false`:
+
+| HTTP | `code` | `message` |
+| --- | --- | --- |
+| 404 | `INVALID_KEY` | Serial Key tidak ditemukan. Periksa kembali kode dari toko Anda. |
+| 403 | `HWID_MISMATCH` | Lisensi terikat perangkat lain. Aktifkan di komputer kasir yang sama. |
+| 403 | `BLOCKED` | Serial Key ini telah diblokir. Hubungi toko Anda. |
+| 403 | `EXPIRED` | Masa langganan Serial Key ini sudah habis. Hubungi toko Anda. |
+| 422 | `INVALID_KEY` | Format/badan permintaan tidak valid |
+| 500 | `NETWORK` | Gagal menghubungi database portal |
+
+Saat `HWID_MISMATCH`, field `locked_hwid` berisi HWID yang sudah terdaftar, supaya
+aplikasi bisa menunjuk perangkatmana yang Holds lock.
+
+Endpoint ini mengizinkan CORS `*` (dipanggil aplikasi desktop, bukan browser) dan
+mengembalikan `Access-Control-Allow-Headers: Content-Type`.
+
+---
+
+## 4. Perintah monorepo (dari root)
+
+```bash
+npm run setup          # install portal + desktop
+npm run dev:portal     # Next.js dev
+npm run build:portal   # next build
+npm run dev:desktop    # Vite + Electron
+npm run build:desktop  # typecheck + bundle renderer
+npm run dist:desktop   # build .exe NSIS
+npm run typecheck      # typecheck kedua project
+npm test               # UJI SELURUH APLIKASI (lihat bagian 5)
+```
+
+Monorepo ini **bukan npm workspaces** — sengaja dipisah agar build native
+`better-sqlite3` milik Electron tidak pernah tersentuh oleh dependensi portal.
+
+---
+
+## 5. Uji seluruh aplikasi
+
+```bash
+npm test                # semua bagian
+npm run test:statis     # hanya pemeriksaan statis
+npm run test:portal     # statis + portal
+npm run test:desktop    # semua kecuali portal
+```
+
+Runner: [`tools/test/run-all.mjs`](./tools/test/run-all.mjs). Yang dijalankan:
+
+| Bagian | Isi |
+| --- | --- |
+| **A. Statis** | syntax `electron/*.js`, tidak ada karakter asing (CJK) di file sumber, tidak ada kunci Supabase asli yang bocor |
+| **B. Portal** | `tsc --noEmit`, keberadaan `.env.example`/`schema.sql`/`seed.sql`/ikon/manifest, `next build`, 4 route API ada, service worker ter-generate, `check:supabase` |
+| **C. Desktop** | `tsc --noEmit`, `vite build`, `build/icon.png` benar-benar PNG 512×512, 29 channel IPC cocok 1:1 dengan `preload.js`, konfigurasi portal (`build-config.json`, alias `VITE_API_URL`) |
+| **D. Fungsi** | 36 tes SQLite, tes HWID + normalisasi serial, e2e renderer (POS/produk/laporan/void), kontrak desktop↔portal (`license.js` asli vs mock yang meniru SQL), UI aktivasi + layar terkunci |
+| **E. Paket** | `electron-builder --win --dir` → `KasirPro.exe` + `app.asar` + native module ter-*unpack*. Di Windows otomatis jadi `npm run dist:win` dan mengecek `.exe` installer |
+
+Hasil terakhir: **36/36 lulus** (`npm test`).
+
+Harness-nya tersimpan permanen di `tools/test/`, jadi bisa dijalankan ulang kapan saja:
+
+```bash
+cd desktop
+ELECTRON_RUN_AS_NODE=1 ./node_modules/electron/dist/electron ../tools/test/db-smoke.js
+ELECTRON_RUN_AS_NODE=1 ./node_modules/electron/dist/electron ../tools/test/hwid-smoke.js
+./node_modules/electron/dist/electron --no-sandbox ../tools/test/e2e-test.js
+./node_modules/electron/dist/electron --no-sandbox ../tools/test/contract-test.cjs
+./node_modules/electron/dist/electron --no-sandbox ../tools/test/ui-activation-test.cjs
+```
+
+Uji `contract-test.cjs` dan `ui-activation-test.cjs` menyalakan
+[`tools/test/mock-portal.cjs`](./tools/test/mock-portal.cjs) — server kecil yang meniru
+persis state machine `activate_license()` di `schema.sql`, lalu kode desktop yang asli
+ditembak ke sana. Dengan begitu **seluruh kemungkinan jawaban server** (ACTIVATED,
+ALREADY_ACTIVE, HWID_MISMATCH, BLOCKED, EXPIRED, INVALID_KEY, NETWORK) teruji tanpa
+menyentuh Supabase.
+
+Uji **live** melawan portal + Supabase sungguhan (butuh portal jalan di `localhost:3000`
+dan akun demo sudah di-seed) tersedia sebagai harness terpisah, bukan bagian `npm test`:
+
+```bash
+cd desktop
+./node_modules/electron/dist/electron --no-sandbox ../tools/test/live-portal-contract.cjs
+```
+
+Validator round-trip API lengkap (login → generate key → aktivasi → HWID mismatch →
+profil → logo → kuota) dijalankan langsung dari koneksi Postgres ke Supabase dan portal
+lokal — sudah dieksekusi dan **semua lulus** sebelum repo ini di-push (circle `30/30`).
+
+---
+
+## 6. Cara deploy
+
+### Portal ke Vercel
+
+```bash
+cd portal
+npx vercel            # preview
+npx vercel --prod     # produksi
+```
+
+- **Root Directory** saat import repo: `portal`
+- Framework preset: **Next.js** (auto terdeteksi)
+- Environment variables: samakan dengan `.env.example` (bagian 1.3)
+
+### Desktop ke Windows
+
+```bash
+cd desktop
+npm run set-portal -- https://domain-anda.vercel.app
+npm run dist:win
+```
+
+atau pakai `.github/workflows/build-desktop.yml` (run manual dari tab Actions).
+Setelah portal online, **pastikan dulu** aktivasi nyata berhasil sebelum
+membagikan installer ke pengguna.
+
+---
+
+## 7. Alur bisnis singkat
+
+1. Operator daftar/login di **portal** (akun dibuat lewat Supabase Auth, baris `partners` otomatis dibuat dengan `license_quota = 5`).
+2. Admin memberi `license_quota` (mis. 10) dan `nama_toko`.
+3. Operator buka **Aktivasi**, isi data pembeli + paket, klik **Generate Key** →
+   portal membuat `KPRO-XXXX-XXXX-XXXX`, mengunci kuota, menghitung komisi sesuai tier, dan
+   menampilkan modal sukses + tombol **Copy & Tutup**.
+4. Operator kirim key ke pembeli (via WhatsApp, dll).
+5. Pembeli masukkan key di aplikasi **desktop** → aplikasi aktif di komputer itu saja.
+6. Sisa kuota & total komisi langsung berubah di layar **Home** portal.
+
+---
+
+## 8. Status verifikasi
+
+Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
+
+| Yang diuji | Hasil |
+| --- | --- |
+| `portal`: `tsc --noEmit` | bersih |
+| `portal`: `next build` | sukses (12 route, service worker ke `public/sw.js`) |
+| `portal`: `check:supabase` | **hijau semua** (env, kunci, tabel, 4 RPC, bucket, toko terdaftar) |
+| `portal`: round-trip API asli vs Supabase (login GoTrue → generate key → komisi tier → aktivasi → ALREADY_ACTIVE → HWID_MISMATCH → INVALID_KEY → profil → upload logo → kuota/komisi) | **30/30 lulus** |
+| `desktop`: `npm install` | 493 paket, `better-sqlite3` di-rebuild untuk Electron 34.5.8 |
+| `desktop`: `tsc --noEmit` | bersih |
+| `desktop`: `vite build` | sukses (~210 kB JS + 25 kB CSS, tanpa warning) |
+| `desktop`: 36 tes SQLite (produk, transaksi, void, laporan, lisensi, settings) | semua lulus |
+| `desktop`: HWID + normalisasi Serial Key | semua lulus |
+| `desktop`: 29 channel IPC preload vs `ipc.js` | cocok 1:1 |
+| `desktop`: e2e headless — CRUD produk, transaksi + potong stok, void + restore stok, laporan, 4 tab UI, screenshot | semua lulus |
+| `desktop`: kontrak `/api/activate` — 26 uji semua kode server | semua lulus |
+| `desktop`: UI aktivasi + HWID mismatch + aplikasi ter-copy → layar terkunci | semua lulus |
+| `desktop`: kontrak live ke portal lokal (`license.js` asli + HWID `node-machine-id` → `KPRO-DEMO-…`) | **17/17 lulus** |
+| `desktop`: `electron-builder --win --dir` | sukses (asar + `better_sqlite3.node` ter-unpack) |
+| **`npm test` (keseluruhan)** | **36/36 lulus** |
+
+### 8.1 Yang hanya bisa dilakukan operator
+
+| # | Langkah | Catatan |
+| --- | --- | --- |
+| 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `toko@contoh.com` |
+| 2 | Deploy `portal` ke Vercel | butuh akun Vercel Anda; isi env sesuai `.env.example` |
+| 3 | `npm run set-portal -- https://domain-anda.vercel.app` lalu `npm run dist:win` | installer NSIS butuh Windows atau `wine`; alternatif: GitHub Actions |
+| 4 | Uji aktivasi nyata dari Vercel (key dari portal → tempel ke aplikasi desktop) | sama seperti kontrak live di atas, hanya domainnya ganti |
+
+Setelah deploy, `npm run check:supabase` tetap **hijau** — itu tanda portal siap dipakai.
+
+### 8.2 Yang tidak bisa diuji di mesin ini
+
+- installer `.exe` NSIS final (butuh Windows/wine)
+- panggilan HTTP ke domain Vercel yang sudah live
+
+Keduanya tetap di-*cover* oleh runner: di Windows `npm test` otomatis menjalankan
+`npm run dist:win` dan memeriksa `.exe` hasilnya.
+
+---
+
+## 9. Catatan keamanan
+
+- `SUPABASE_SECRET_KEY` hanya boleh ada di server portal (`.env.local` / Vercel env).
+  Jangan pernah masuk ke `NEXT_PUBLIC_*` atau ke folder `desktop/`.
+- Format `.env*` sudah masuk `.gitignore`; hanya `.env.example` yang di-commit.
+  `npm test` juga memindai file sumber untuk memastikan tidak ada kunci asli yang bocor.
+- `desktop/electron/build-config.json` (URL portal hasil build) tidak di-commit; pakai
+  `npm run set-portal`.
+- Aktivasi butuh internet **1x**; setelah itu aplikasi benar-benar offline.
+  Ini bukan DRM anti-tamper sempurna — proteksi HWID hanya sekuat
+  kemampuan aplikasi offline untuk membaca HWID-nya sendiri, tapi cukup
+  menahan aplikasi yang disalin mentah ke komputer lain.
+- `activate_license()` adalah `SECURITY DEFINER` dan tidak diberi `grant execute`
+  ke `anon`/`authenticated` — hanya `service_role` (dipakai Route Handler server).
