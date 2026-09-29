@@ -17,20 +17,10 @@ portal/public/workbox-*.js
 portal/public/workbox-*.js.map
 portal/public/fallback-*.js
 
-# ---- desktop (Electron + Vite) ----
-desktop/dist/
-desktop/release/
-desktop/*.tsbuildinfo
-desktop/build/icon.ico
-
-# konfigurasi portal yang ditempel saat build (isi sendiri, jangan commit)
-desktop/electron/build-config.json
-
 # ---- env ----
 .env
 .env.local
 .env*.local
-desktop/.env
 
 # ---- misc ----
 .DS_Store
