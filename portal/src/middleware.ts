@@ -4,9 +4,16 @@ import { createServerClient } from '@supabase/ssr';
 import { env } from '@/lib/env';
 
 /**
- * Refresh sesi Supabase + proteksi route.
- *  - /home, /aktivasi, /profile  -> wajib login
- *  - /login                      -> kalau sudah login, lempar ke /home
+ * Proteksi route + refresh sesi dengan biaya jaringan minimal.
+ *
+ *  - /home, /aktivasi, /profile  -> wajib login (redirect ke /login)
+ *  - /login                      -> kalau sudah ada sesi, lempar ke /home
+ *
+ * Memakai `auth.getSession()` (decode JWT dari cookie — TANPA panggilan
+ * jaringan) ketika token masih valid; refresh token ke Supabase hanya terjadi
+ * bila token kedaluwarsa (± tiap 1 jam). Tanpa cookie sesi: tidak ada
+ * jaringan sama sekali. Validasi token sungguhan tetap dilakukan `getUser()`
+ * di halaman/route handler (token palsu -> halaman mengalihkan ke /login).
  */
 const PROTECTED = ['/home', '/aktivasi', '/profile'];
 
@@ -30,22 +37,21 @@ export async function middleware(req: NextRequest) {
     },
   });
 
-  let user: { id: string } | null = null;
-  // Tanpa cookie sesi berarti pasti belum login — tidak perlu hubungi
-  // Supabase (hemat 1 round-trip di tiap request anonymous, contoh /login).
+  // Tanpa cookie sesi = pasti belum login; hindari memuat klien & refresh.
   const hasSessionCookie = req.cookies.getAll().some((c) => c.name.startsWith('sb-'));
+  let hasSession = false;
   if (hasSessionCookie) {
     try {
-      const { data } = await supabase.auth.getUser();
-      user = data.user ?? null;
+      const { data } = await supabase.auth.getSession();
+      hasSession = !!data.session;
     } catch {
-      user = null;
+      hasSession = false;
     }
   }
 
   const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  if (isProtected && !user) {
+  if (isProtected && !hasSession) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';
@@ -53,7 +59,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === '/login' && user) {
+  if (pathname === '/login' && hasSession) {
     const url = req.nextUrl.clone();
     url.pathname = '/home';
     url.search = '';
