@@ -25,16 +25,6 @@ export default async function ProfilePage() {
 
   const partner = (data ?? null) as Partner | null;
 
-  const { data: licenseRows } = await supabase
-    .from('licenses')
-    .select('komisi')
-    .eq('partner_id', partner?.id ?? '00000000-0000-0000-0000-000000000000');
-
-  const totalKomisi = (licenseRows ?? []).reduce(
-    (sum, row) => sum + Number((row as { komisi: number }).komisi ?? 0),
-    0,
-  );
-
   return (
     <ProfileForm
       initial={{
@@ -46,7 +36,6 @@ export default async function ProfilePage() {
       email={user.email ?? ''}
       totalTerjual={partner?.total_terjual ?? 0}
       quota={partner?.license_quota ?? 0}
-      totalKomisi={totalKomisi}
     />
   );
 }

@@ -17,7 +17,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/form';
-import { bersihkanTelepon, inisial, rupiah } from '@/lib/format';
+import { bersihkanTelepon, inisial } from '@/lib/format';
 import { TIER_RULES, tierOf, tierRangeLabel } from '@/lib/commission';
 import { cn } from '@/lib/utils';
 
@@ -26,12 +26,11 @@ interface Props {
   email: string;
   totalTerjual: number;
   quota: number;
-  totalKomisi: number;
 }
 
 const MAX_LOGO = 2 * 1024 * 1024; // 2 MB
 
-export default function ProfileForm({ initial, email, totalTerjual, quota, totalKomisi }: Props) {
+export default function ProfileForm({ initial, email, totalTerjual, quota }: Props) {
   const router = useRouter();
 
   const [namaToko, setNamaToko] = React.useState(initial.nama_toko);
@@ -221,7 +220,11 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
           />
         </Field>
 
-        <div className="rounded-2xl bg-zinc-50 px-3.5 py-3 text-[12px] text-zinc-500">
+        <Button type="submit" loading={saving} className="h-14">
+          <Save className="h-4 w-4" /> Simpan
+        </Button>
+
+        <div className="-mt-1 rounded-xl bg-gray-50 px-3.5 py-3 text-[12px] text-zinc-500">
           <div className="flex items-center justify-between">
             <span>Email akun</span>
             <span className="font-semibold text-zinc-700">{email}</span>
@@ -253,14 +256,10 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
             <span>{message.text}</span>
           </div>
         ) : null}
-
-        <Button type="submit" loading={saving}>
-          <Save className="h-4 w-4" /> Simpan
-        </Button>
       </form>
 
       {/* Penghargaan Title */}
-      <section className="mt-8">
+      <section className="mb-20 mt-8">
         <div className="mb-3 flex items-center gap-2">
           <Award className="h-4 w-4 text-zinc-500" />
           <h2 className="text-[15px] font-bold">Penghargaan Title</h2>
@@ -317,11 +316,6 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, total
             );
           })}
         </ul>
-
-        <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-          Bronze 1-5 lisensi 5%, Silver 6-10 10%, Gold 11-30 20%, Platinum 30+ 30%. Total komisi Anda
-          saat ini {rupiah(totalKomisi)}.
-        </p>
       </section>
 
       <form action="/api/auth/logout" method="post" className="mt-8">
