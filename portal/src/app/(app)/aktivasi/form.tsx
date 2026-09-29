@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Segmented, Textarea } from '@/components/ui/form';
 import { Modal } from '@/components/ui/modal';
 import { bersihkanTelepon, rupiah } from '@/lib/format';
+import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
+import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
+import { cn } from '@/lib/utils';
 import {
   BASE_COMMISSION,
   LICENSE_TYPE_LABEL,
@@ -32,56 +35,90 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
   const [paket, setPaket] = React.useState<PaketType>('bundle');
   const [tipe, setTipe] = React.useState<LicenseType>('sekali');
 
-  const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<License | null>(null);
   const [copied, setCopied] = React.useState(false);
 
+  /* Penjaga klik-ganda: 1 klik = 1 permintaan, tombol terkunci 1,5 detik. */
+  const generate = useButtonGuard();
+  const aksiModal = useClickCooldown(1500);
+  const loading = generate.busy;
+
   const tier = tierOf(totalTerjual);
   const komisiPerKey = Math.round(BASE_COMMISSION[paket] * tier.rate);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  /* ----------------------------- validasi ----------------------------- */
+  const namaError = React.useMemo(() => {
+    const n = nama.trim();
+    if (n.length === 0) return '';
+    if (!namaValid(n)) return 'Nama minimal 3 karakter.';
+    return '';
+  }, [nama]);
+  const teleponError = React.useMemo(() => cekTelepon(telepon), [telepon]);
+  const alamatError = React.useMemo(() => {
+    const a = alamat.trim();
+    if (a.length === 0) return '';
+    return cekAlamat(a);
+  }, [alamat]);
+  const kuotaError = quota <= 0 ? 'Sisa kuota lisensi toko Anda habis. Hubungi admin untuk topup.' : '';
+
+  /** Generate Key hanya aktif bila form benar-benar valid. */
+  const isFormValid = React.useMemo(
+    () =>
+      quota > 0 &&
+      namaValid(nama) &&
+      cekTelepon(telepon) === '' &&
+      cekAlamat(alamat) === '' &&
+      Boolean(paket) &&
+      Boolean(tipe),
+    [quota, nama, telepon, alamat, paket, tipe],
+  );
+
+  async function kirim() {
     setError(null);
 
-    if (!nama.trim()) return setError('Nama pembeli wajib diisi.');
-    if (telepon.trim().length < 8) return setError('Nomor telepon minimal 8 digit.');
-    if (!alamat.trim()) return setError('Alamat wajib diisi.');
-    if (quota <= 0)
-      return setError('Sisa kuota lisensi toko Anda habis. Hubungi admin untuk topup.');
+    const res = await fetch('/api/licenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nama: nama.trim(),
+        telepon: bersihkanTelepon(telepon),
+        alamat: alamat.trim(),
+        paket,
+        tipe,
+      }),
+    });
 
-    setLoading(true);
-    try {
-      const res = await fetch('/api/licenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nama: nama.trim(),
-          telepon: bersihkanTelepon(telepon),
-          alamat: alamat.trim(),
-          paket,
-          tipe,
-        }),
-      });
+    const json = (await res.json()) as { ok: boolean; message: string; license?: License };
 
-      const json = (await res.json()) as { ok: boolean; message: string; license?: License };
-
-      if (!res.ok || !json.ok || !json.license) {
-        setError(json.message || 'Gagal membuat Serial Key.');
-        return;
-      }
-
-      setResult(json.license);
-      setCopied(false);
-      setNama('');
-      setTelepon('');
-      setAlamat('');
-      router.refresh(); // segarkan sisa kuota di server
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal menghubungi server.');
-    } finally {
-      setLoading(false);
+    if (!res.ok || !json.ok || !json.license) {
+      setError(json.message || 'Gagal membuat Serial Key.');
+      return;
     }
+
+    setResult(json.license);
+    setCopied(false);
+    setNama('');
+    setTelepon('');
+    setAlamat('');
+    router.refresh(); // segarkan sisa kuota di server
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (loading) {
+      setError('Mohon tunggu… permintaan sebelumnya sedang diproses.');
+      return;
+    }
+    if (!isFormValid) {
+      setError('Lengkapi dulu nama, telepon, dan alamat dengan benar.');
+      return;
+    }
+    void generate.guard(kirim, {
+      pesanTunggu: 'Serial Key sedang dibuat…',
+      onBlocked: (pesan) => setError(pesan),
+      onError: (e) => setError(e instanceof Error ? e.message : 'Gagal menghubungi server.'),
+    });
   }
 
   async function copyKey() {
@@ -150,17 +187,20 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
       </section>
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field label="Nama" htmlFor="nama">
+        <Field label="Nama" htmlFor="nama" error={namaError}>
           <Input
             id="nama"
             placeholder="Nama lengkap pembeli"
             value={nama}
             onChange={(e) => setNama(e.target.value)}
+            onBlur={() => setError(null)}
             maxLength={80}
+            aria-invalid={Boolean(namaError)}
+            className={cn(namaError && 'input-invalid')}
           />
         </Field>
 
-        <Field label="Telepon" htmlFor="telepon">
+        <Field label="Telepon" htmlFor="telepon" error={teleponError}>
           <Input
             id="telepon"
             type="tel"
@@ -169,16 +209,20 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
             value={telepon}
             onChange={(e) => setTelepon(e.target.value)}
             maxLength={15}
+            aria-invalid={Boolean(teleponError)}
+            className={cn(teleponError && 'input-invalid')}
           />
         </Field>
 
-        <Field label="Alamat" htmlFor="alamat">
+        <Field label="Alamat" htmlFor="alamat" error={alamatError}>
           <Textarea
             id="alamat"
             placeholder="Alamat lengkap pembeli"
             value={alamat}
             onChange={(e) => setAlamat(e.target.value)}
             maxLength={240}
+            aria-invalid={Boolean(alamatError)}
+            className={cn(alamatError && 'input-invalid')}
           />
         </Field>
 
@@ -213,9 +257,16 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
           </div>
         ) : null}
 
-        <Button type="submit" loading={loading} className="mt-1">
-          <KeyRound className="h-4 w-4" /> Generate Key
+        <Button type="submit" loading={loading} disabled={!isFormValid} className="mt-1">
+          <KeyRound className="h-4 w-4" />
+          {loading ? 'Membuat Serial Key…' : 'Generate Key'}
         </Button>
+
+        {kuotaError ? (
+          <p className="field-error">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {kuotaError}
+          </p>
+        ) : null}
       </form>
 
       {/* MODAL: Generate Key Berhasil */}
@@ -247,7 +298,12 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
               <Row label="Komisi" value={rupiah(result.komisi_amount)} />
             </dl>
 
-            <Button type="button" onClick={copyAndClose} className="mt-4">
+            <Button
+              type="button"
+              onClick={() => aksiModal.run(copyAndClose, 'copy-tutup')}
+              disabled={aksiModal.locked('copy-tutup')}
+              className="mt-4"
+            >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               Copy &amp; Tutup
             </Button>
@@ -255,7 +311,8 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
               type="button"
               variant="outline"
               className="mt-2"
-              onClick={() => setResult(null)}
+              onClick={() => aksiModal.run(() => setResult(null), 'tutup-modal')}
+              disabled={aksiModal.locked('tutup-modal')}
             >
               Tutup
             </Button>

@@ -39,6 +39,22 @@
   input[type='number'] {
     -moz-appearance: textfield;
   }
+
+  /* ------------------------------------------------------------------ */
+  /* Tombol: anti-klik-ganda & status valid                             */
+  /* ------------------------------------------------------------------ */
+
+  /* Tombol yang sedang diproses / tidak valid: tak bisa diklik, tampilan redup. */
+  button:disabled {
+    pointer-events: none;
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Penanda sedang diproses, dipakai spinner di dalam tombol. */
+  button[data-loading='true'] {
+    position: relative;
+  }
 }
 
 @layer components {
@@ -69,6 +85,16 @@
 
   .field-textarea {
     @apply w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-[15px] leading-relaxed text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10;
+  }
+
+  /* Input yang gagal validasi. */
+  .input-invalid {
+    @apply !border-red-500 focus:!border-red-500 focus:!ring-red-500/15;
+  }
+
+  /* Teks bantu error di bawah field. */
+  .field-error {
+    @apply mt-1 flex items-center gap-1 text-[12px] font-semibold text-red-600;
   }
 
   .btn-primary {

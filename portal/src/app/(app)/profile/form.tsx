@@ -18,6 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/form';
 import { bersihkanTelepon, inisial } from '@/lib/format';
+import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
+import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
 import { TIER_RULES, tierOf, tierRangeLabel } from '@/lib/commission';
 import { cn } from '@/lib/utils';
 
@@ -39,14 +41,41 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
   const [logoUrl, setLogoUrl] = React.useState(initial.logo_url);
   const [preview, setPreview] = React.useState<string | null>(null);
 
-  const [saving, setSaving] = React.useState(false);
-  const [uploading, setUploading] = React.useState(false);
   const [message, setMessage] = React.useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+  /* Penjaga klik-ganda: 1 klik = 1 permintaan, tombol terkunci 1,5 detik.
+     Simpan & Upload logo punya kunci masing-masing supaya tak saling menghalangi. */
+  const simpan = useButtonGuard();
+  const unggah = useButtonGuard();
+  const ui = useClickCooldown(1500);
+  const saving = simpan.busy;
+  const uploading = unggah.busy;
 
   const fileRef = React.useRef<HTMLInputElement>(null);
   const tier = tierOf(totalTerjual);
 
-  async function onUpload(file: File) {
+  /* ----------------------------- validasi ----------------------------- */
+  const namaError = React.useMemo(() => {
+    const n = namaToko.trim();
+    if (n.length === 0) return '';
+    if (!namaValid(n)) return 'Nama toko minimal 3 karakter.';
+    return '';
+  }, [namaToko]);
+  // No HP opsional: kosong = aman, tapi bila diisi harus pola 08xx.
+  const noHpError = React.useMemo(() => cekTelepon(noHp), [noHp]);
+  // Alamat opsional: bila diisi, minimal 10 karakter.
+  const alamatError = React.useMemo(() => {
+    const a = alamat.trim();
+    if (a.length === 0) return '';
+    return cekAlamat(a);
+  }, [alamat]);
+
+  const isFormValid = React.useMemo(
+    () => namaValid(namaToko) && cekTelepon(noHp) === '' && cekAlamat(alamat) === '',
+    [namaToko, noHp, alamat],
+  );
+
+  function pilihFile(file: File) {
     setMessage(null);
 
     if (!file.type.startsWith('image/')) {
@@ -58,7 +87,15 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
       return;
     }
 
-    setUploading(true);
+    void unggah.guard(() => onUpload(file), {
+      pesanTunggu: 'Logo sedang diunggah…',
+      onBlocked: (pesan) => setMessage({ tone: 'error', text: pesan }),
+      onError: (err) =>
+        setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal mengunggah.' }),
+    });
+  }
+
+  async function onUpload(file: File) {
     setPreview(URL.createObjectURL(file));
 
     try {
@@ -81,21 +118,32 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
       setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal mengunggah.' });
       setPreview(null);
     } finally {
-      setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   }
 
-  async function onSave(e: React.FormEvent) {
+  function onSave(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
 
-    if (!namaToko.trim()) {
-      setMessage({ tone: 'error', text: 'Nama toko wajib diisi.' });
+    if (saving) {
+      setMessage({ tone: 'error', text: 'Mohon tunggu… penyimpanan sebelumnya sedang diproses.' });
+      return;
+    }
+    if (!isFormValid) {
+      setMessage({ tone: 'error', text: 'Periksa lagi nama toko, no HP, dan alamat.' });
       return;
     }
 
-    setSaving(true);
+    void simpan.guard(kirimProfil, {
+      pesanTunggu: 'Profil sedang disimpan…',
+      onBlocked: (pesan) => setMessage({ tone: 'error', text: pesan }),
+      onError: (err) =>
+        setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal menyimpan.' }),
+    });
+  }
+
+  async function kirimProfil() {
     try {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
@@ -117,8 +165,6 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
       router.refresh();
     } catch (err) {
       setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal menyimpan.' });
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -135,6 +181,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
+          data-loading={uploading}
           aria-label={`${inisial(namaToko || email)} — Ubah logo toko`}
           className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-zinc-100 ring-1 ring-zinc-200"
         >
@@ -167,18 +214,22 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) void onUpload(f);
+            // Pilih file yang sama dua kali harus tetap bisa (kunci ada di aksi, bukan di input).
+            if (f) pilihFile(f);
           }}
         />
         <p className="mt-2 text-[12px] text-zinc-500">Ketuk untuk upload logo toko (maks. 2 MB)</p>
         {logoUrl ? (
           <button
             type="button"
-            onClick={() => {
-              setLogoUrl(null);
-              setPreview(null);
-              setMessage({ tone: 'ok', text: 'Simpan profil untuk menerapkan logo kosong.' });
-            }}
+            onClick={() =>
+              ui.run(() => {
+                setLogoUrl(null);
+                setPreview(null);
+                setMessage({ tone: 'ok', text: 'Simpan profil untuk menerapkan logo kosong.' });
+              }, 'hapus-logo')
+            }
+            disabled={ui.locked('hapus-logo')}
             className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-zinc-500"
           >
             <Trash2 className="h-3.5 w-3.5" /> Hapus logo
@@ -188,17 +239,19 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
 
       {/* Form toko */}
       <form onSubmit={onSave} className="space-y-4" noValidate>
-        <Field label="Nama Toko" htmlFor="nama_toko">
+        <Field label="Nama Toko" htmlFor="nama_toko" error={namaError}>
           <Input
             id="nama_toko"
             placeholder="Nama toko komputer"
             value={namaToko}
             onChange={(e) => setNamaToko(e.target.value)}
             maxLength={80}
+            aria-invalid={Boolean(namaError)}
+            className={cn(namaError && 'input-invalid')}
           />
         </Field>
 
-        <Field label="No HP" htmlFor="no_hp">
+        <Field label="No HP" htmlFor="no_hp" error={noHpError} hint="Opsional, contoh: 081234567890">
           <Input
             id="no_hp"
             type="tel"
@@ -207,21 +260,26 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
             value={noHp}
             onChange={(e) => setNoHp(e.target.value)}
             maxLength={15}
+            aria-invalid={Boolean(noHpError)}
+            className={cn(noHpError && 'input-invalid')}
           />
         </Field>
 
-        <Field label="Alamat" htmlFor="alamat">
+        <Field label="Alamat" htmlFor="alamat" error={alamatError}>
           <Textarea
             id="alamat"
             placeholder="Alamat lengkap toko"
             value={alamat}
             onChange={(e) => setAlamat(e.target.value)}
             maxLength={240}
+            aria-invalid={Boolean(alamatError)}
+            className={cn(alamatError && 'input-invalid')}
           />
         </Field>
 
-        <Button type="submit" loading={saving} className="h-14">
-          <Save className="h-4 w-4" /> Simpan
+        <Button type="submit" loading={saving} disabled={!isFormValid} className="h-14">
+          <Save className="h-4 w-4" />
+          {saving ? 'Menyimpan…' : 'Simpan'}
         </Button>
 
         <div className="-mt-1 rounded-xl bg-gray-50 px-3.5 py-3 text-[12px] text-zinc-500">
@@ -318,8 +376,20 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
         </ul>
       </section>
 
-      <form action="/api/auth/logout" method="post" className="mt-8">
-        <Button type="submit" variant="outline">
+      <form
+        action="/api/auth/logout"
+        method="post"
+        className="mt-8"
+        onSubmit={(e) => {
+          // Cegah logout ganda: klik kedua dalam 1,5 detik tidak di-forward.
+          if (ui.locked('keluar')) {
+            e.preventDefault();
+            return;
+          }
+          ui.run(() => undefined, 'keluar');
+        }}
+      >
+        <Button type="submit" variant="outline" disabled={ui.locked('keluar')}>
           <LogOut className="h-4 w-4" /> Keluar
         </Button>
       </form>

@@ -34,6 +34,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     <button
       ref={ref}
       disabled={disabled || loading}
+      data-loading={loading ? 'true' : undefined}
+      aria-busy={loading || undefined}
       className={cn(VARIANT[variant], SIZE[size], 'disabled:pointer-events-none', className)}
       {...props}
     >

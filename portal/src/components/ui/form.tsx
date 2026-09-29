@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { AlertCircle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -20,11 +21,14 @@ export const Textarea = React.forwardRef<
 export function Field({
   label,
   hint,
+  error,
   htmlFor,
   children,
 }: {
   label: string;
   hint?: string;
+  /** Pesan validasi. Kalau ada, border input jadi merah + teks bantuan di bawah. */
+  error?: string;
   htmlFor?: string;
   children: React.ReactNode;
 }) {
@@ -34,7 +38,14 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint ? <p className="mt-1 text-[12px] text-zinc-500">{hint}</p> : null}
+      {error ? (
+        <p className="field-error" role="alert">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1 text-[12px] text-zinc-500">{hint}</p>
+      ) : null}
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default async function HomePage() {
             <span className="truncate">{namaToko}</span>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
           </Link>
-          <form action="/api/auth/logout" method="post">
+          <form id="form-keluar" action="/api/auth/logout" method="post">
             <button
               type="submit"
               aria-label="Keluar"
@@ -131,6 +131,24 @@ export default async function HomePage() {
           </ul>
         )}
       </section>
+
+      {/* Anti klik-ganda tanpa hydration: 1 klik = 1 logout, terkunci 1,5 detik. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function () {
+  var form = document.getElementById('form-keluar');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    var btn = form.querySelector('button');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    window.setTimeout(function () { btn.disabled = false; }, 1500);
+  });
+})();
+`,
+        }}
+      />
     </main>
   );
 }

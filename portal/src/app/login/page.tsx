@@ -115,9 +115,9 @@ export default async function LoginPage({
           </div>
         ) : null}
 
-        <button type="submit" className="btn-primary mt-2">
+        <button type="submit" id="btn-masuk" className="btn-primary mt-2" data-loading="false">
           <LogIn className="h-4 w-4" />
-          Masuk
+          <span>Masuk</span>
         </button>
       </form>
 
@@ -174,6 +174,26 @@ export default async function LoginPage({
       var u = document.getElementById('username');
       if (u) u.value = 'demo';
       pass.value = 'toko12345';
+    });
+  }
+
+  /* Anti klik-ganda: 1 klik = 1 submit, tombol terkunci 1,5 detik.
+     Kalau server tidak membalas dalam 1,5 detik (mis. jaringan lambat),
+     tombol dilepas lagi supaya user tidak terkunci permanen. */
+  var form = document.querySelector('form');
+  var masuk = document.getElementById('btn-masuk');
+  if (form && masuk) {
+    var label = masuk.querySelector('span');
+    form.addEventListener('submit', function () {
+      if (masuk.disabled) return;
+      masuk.disabled = true;
+      masuk.setAttribute('data-loading', 'true');
+      if (label) label.textContent = 'Memproses…';
+      window.setTimeout(function () {
+        masuk.disabled = false;
+        masuk.setAttribute('data-loading', 'false');
+        if (label) label.textContent = 'Masuk';
+      }, 1500);
     });
   }
 })();
