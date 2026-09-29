@@ -3,30 +3,22 @@ import Link from 'next/link';
 import { ChevronRight, KeyRound, LogOut, Sparkles } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/server';
+import { getPortalSession } from '@/lib/supabase/session';
 import { PAKET_LABEL, tierOf, tierRangeLabel } from '@/lib/commission';
 import { rupiah, tanggalPanjang } from '@/lib/format';
-import type { License, Partner } from '@/types';
+import type { License } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Home — KasirPro Portal' };
 
 export default async function HomePage() {
+  const sesi = await getPortalSession();
+  if (!sesi) redirect('/login');
+
+  const partner = sesi.partner;
+
   const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: partnerRow } = await supabase
-    .from('partners')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const partner = (partnerRow ?? null) as Partner | null;
-
   const { data: licenseRows } = await supabase
     .from('licenses')
     .select('*')

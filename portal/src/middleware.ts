@@ -31,11 +31,16 @@ export async function middleware(req: NextRequest) {
   });
 
   let user: { id: string } | null = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user ?? null;
-  } catch {
-    user = null;
+  // Tanpa cookie sesi berarti pasti belum login — tidak perlu hubungi
+  // Supabase (hemat 1 round-trip di tiap request anonymous, contoh /login).
+  const hasSessionCookie = req.cookies.getAll().some((c) => c.name.startsWith('sb-'));
+  if (hasSessionCookie) {
+    try {
+      const { data } = await supabase.auth.getUser();
+      user = data.user ?? null;
+    } catch {
+      user = null;
+    }
   }
 
   const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));

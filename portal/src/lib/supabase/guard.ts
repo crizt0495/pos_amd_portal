@@ -1,8 +1,8 @@
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { cache } from 'react';
 
-import { createClient } from '@/lib/supabase/server';
+import { getPortalSession } from '@/lib/supabase/session';
 import type { Partner } from '@/types';
 
 export interface AuthedUser {
@@ -16,49 +16,34 @@ export type AuthResult = { error: string; status: number } | { ok: true; user: A
 /**
  * Validasi user yang sedang login (dari cookie sesi) + ambil baris `partners`.
  * Dipakai di setiap Route Handler yang mengubah data.
+ *
+ * Menggunakan getPortalSession() yang di-cache per-request, jadi autentikasi
+ * + query partner tidak dijalankan berulang dalam request yang sama.
  */
-export async function requireAuth(): Promise<AuthResult> {
-  const supabase = createClient();
+export const requireAuth = cache(async (): Promise<AuthResult> => {
+  const sesi = await getPortalSession();
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
+  if (!sesi) {
     return { error: 'Sesi tidak valid. Silakan login ulang.', status: 401 };
   }
 
-  const { data: partner, error: pErr } = await supabase
-    .from('partners')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (pErr) {
-    return { error: `Gagal memuat data toko: ${pErr.message}`, status: 500 };
-  }
-
-  if (!partner) {
+  if (!sesi.partner) {
     return { error: 'Data toko belum terdaftar. Hubungi admin.', status: 403 };
   }
 
-  if ((partner as Partner).status === 'suspended') {
+  if (sesi.partner.status === 'suspended') {
     return { error: 'Akun toko Anda dinonaktifkan. Hubungi admin.', status: 403 };
   }
 
   return {
     ok: true,
-    user: { userId: user.id, email: user.email ?? '', partner: partner as Partner },
+    user: { userId: sesi.user.id, email: sesi.user.email, partner: sesi.partner },
   };
-}
+});
 
 /** Ambil user yang sedang login saja (tanpa data partner). */
 export async function getCurrentUser(): Promise<{ id: string; email: string } | null> {
-  const supabase: SupabaseClient = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return { id: user.id, email: user.email ?? '' };
+  const sesi = await getPortalSession();
+  if (!sesi) return null;
+  return { id: sesi.user.id, email: sesi.user.email };
 }
