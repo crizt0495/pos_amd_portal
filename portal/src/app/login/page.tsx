@@ -34,7 +34,7 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col px-5 pb-8 pt-14">
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col px-5 pb-8 pt-14 sm:max-w-[480px]">
       <div className="mb-10 flex items-center gap-3">
         <Image
           src="/icons/icon-192.png"

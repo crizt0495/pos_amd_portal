@@ -18,9 +18,9 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Navigasi utama"
-      className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-zinc-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:max-w-[560px] md:max-w-[640px]"
+      className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-zinc-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:max-w-[560px] md:max-w-[720px] lg:max-w-[880px] xl:max-w-[1024px]"
     >
-      <ul className="grid grid-cols-3">
+      <ul className="mx-auto grid w-full max-w-[430px] grid-cols-3">
         {ITEMS.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

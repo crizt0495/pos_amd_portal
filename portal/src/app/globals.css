@@ -36,16 +36,17 @@
 }
 
 @layer components {
-  /* Kerangka aplikasi: responsif semua perangkat.
+  /* Kerangka aplikasi: responsif semua perangkat (kolom tengah yang
+     melebar bertahap mengikuti ukuran layar).
      Phone (<=639px) : kolom 430px (tampilan mobile-first)
      Tablet (640+)   : kolom 560px
-     Desktop (768+)  : kolom 640px di tengah layar */
+     Desktop (768+)  : kolom 720px -> 880px (1024+) -> 1024px (1280+) */
   .app-shell {
-    @apply relative mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-white sm:max-w-[560px] md:max-w-[640px];
+    @apply relative mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-white sm:max-w-[560px] md:max-w-[720px] lg:max-w-[880px] xl:max-w-[1024px];
   }
 
   .app-content {
-    @apply flex-1 px-4 pb-28 pt-4 sm:px-6 md:px-8;
+    @apply flex-1 px-4 pb-28 pt-4 sm:px-6 md:px-8 lg:px-10;
   }
 
   .card-soft {
