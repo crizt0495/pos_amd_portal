@@ -3,29 +3,31 @@ import Link from 'next/link';
 import { ChevronRight, KeyRound, LogOut, Sparkles } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/server';
-import { getPortalSession } from '@/lib/supabase/session';
+import { getPortalUser } from '@/lib/supabase/session';
 import { PAKET_LABEL, tierOf, tierRangeLabel } from '@/lib/commission';
 import { rupiah, tanggalPanjang } from '@/lib/format';
-import type { License } from '@/types';
+import type { License, Partner } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Home — KasirPro Portal' };
 
 export default async function HomePage() {
-  const sesi = await getPortalSession();
-  if (!sesi) redirect('/login');
+  const user = await getPortalUser();
+  if (!user) redirect('/login');
 
-  const partner = sesi.partner;
-
+  // Satu panggilan database: partner + lisensi terbarunya (embedded PostgREST).
   const supabase = createClient();
-  const { data: licenseRows } = await supabase
-    .from('licenses')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(20);
+  const { data: partnerRow } = await supabase
+    .from('partners')
+    .select(
+      'id, nama_toko, total_terjual, license_quota, licenses(order: created_at.desc, limit: 20, created_at, paket_type, pembeli_nama, komisi_amount, status, serial_key)',
+    )
+    .eq('user_id', user.id)
+    .maybeSingle();
 
-  const licenses = (licenseRows ?? []) as License[];
+  const partner = (partnerRow ?? null) as (Partner & { licenses?: License[] }) | null;
+  const licenses = (partner?.licenses ?? []) as License[];
 
   const namaToko = partner?.nama_toko ?? 'Toko Saya';
   const sisa = partner?.license_quota ?? 0;
