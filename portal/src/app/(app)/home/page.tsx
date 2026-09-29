@@ -45,7 +45,7 @@ export default async function HomePage() {
         <div className="flex items-center gap-1.5">
           <Link
             href="/profile"
-            className="flex max-w-[150px] items-center gap-1 rounded-full bg-zinc-100 py-1.5 pl-3 pr-2 text-[13px] font-medium text-zinc-700"
+            className="flex max-w-[150px] items-center gap-1 rounded-full bg-zinc-100 py-1.5 pl-3 pr-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-200"
           >
             <span className="truncate">{namaToko}</span>
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
@@ -55,7 +55,7 @@ export default async function HomePage() {
               type="submit"
               aria-label="Keluar"
               title="Keluar"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition active:scale-95"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 active:scale-95"
             >
               <LogOut className="h-3.5 w-3.5" />
             </button>
@@ -108,7 +108,7 @@ export default async function HomePage() {
         ) : (
           <ul className="divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-100 bg-white">
             {licenses.map((l) => (
-              <li key={l.id} className="px-3.5 py-3">
+              <li key={l.id} className="px-3.5 py-3 transition hover:bg-zinc-50">
                 {/* Baris 1: tanggal - paket - nama konsumen */}
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-zinc-600">
@@ -137,9 +137,11 @@ export default async function HomePage() {
 
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
-    <div className="card-soft flex flex-col items-center justify-center px-2 py-3.5 text-center">
-      <span className="tabular text-[19px] font-bold leading-none text-zinc-900">{value}</span>
-      <span className="mt-1.5 text-[12px] font-semibold text-zinc-600">{label}</span>
+    <div className="card-soft px-2 py-4 text-center">
+      <span className="tabular block text-[24px] font-bold leading-none text-zinc-900">{value}</span>
+      <span className="mt-2 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        {label}
+      </span>
     </div>
   );
 }
