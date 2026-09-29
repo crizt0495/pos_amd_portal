@@ -2,25 +2,20 @@
   "name": "kasirpro",
   "version": "1.0.0",
   "private": true,
-  "description": "KasirPro Monorepo — PWA Portal Operator (Vercel) + Aplikasi Kasir Desktop (Electron, offline)",
+  "description": "KasirPro — PWA Portal Operator (Vercel)",
   "license": "UNLICIPED",
   "scripts": {
-    "setup": "npm run install:portal && npm run install:desktop",
+    "setup": "npm run install:portal",
     "install:portal": "npm --prefix ./portal install",
-    "install:desktop": "npm --prefix ./desktop install",
     "dev:portal": "npm --prefix ./portal run dev",
     "build:portal": "npm --prefix ./portal run build",
     "start:portal": "npm --prefix ./portal run start",
-    "dev:desktop": "npm --prefix ./desktop run dev",
-    "build:desktop": "npm --prefix ./desktop run build",
-    "dist:desktop": "npm --prefix ./desktop run dist:win",
     "deploy": "vercel deploy --prod --yes",
     "deploy:preview": "vercel deploy --yes",
-    "typecheck": "npm --prefix ./portal run typecheck && npm --prefix ./desktop run typecheck",
+    "typecheck": "npm --prefix ./portal run typecheck",
     "test": "node tools/test/run-all.mjs",
     "test:statis": "node tools/test/run-all.mjs statis",
-    "test:portal": "node tools/test/run-all.mjs portal",
-    "test:desktop": "node tools/test/run-all.mjs desktop"
+    "test:portal": "node tools/test/run-all.mjs portal"
   },
   "engines": {
     "node": ">=18.17.0"

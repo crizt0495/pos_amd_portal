@@ -1,8 +1,8 @@
 # =============================================================================
-#  CI — typecheck + uji otomatis (Linux, tanpa butuh Windows/Supabase)
+#  CI — typecheck + uji otomatis (Linux, tanpa butuh Supabase)
 # =============================================================================
 #  Jalankan otomatis setiap push, dan bisa dipicu manual dari tab Actions.
-#  Uji yang butuh Supabase/Windows hanya dilaporkan sebagai catatan, bukan
+#  Uji yang butuh Supabase hanya dilaporkan sebagai catatan, bukan
 #  menggagalkan build (lihat "Status verifikasi" di README).
 # =============================================================================
 name: CI
@@ -38,21 +38,14 @@ jobs:
       - name: Install portal
         run: npm --prefix ./portal install
 
-      - name: Install desktop
-        run: npm --prefix ./desktop install
-
       - name: Typecheck portal
         run: npm --prefix ./portal run typecheck
 
       - name: Build portal
         run: npm --prefix ./portal run build
 
-      - name: Typecheck + build desktop
-        run: npm --prefix ./desktop run build
+      - name: Uji statis
+        run: node tools/test/run-all.mjs statis
 
-      - name: Uji statis + SQLite + HWID
-        run: |
-          node tools/test/run-all.mjs statis
-          cd desktop
-          ELECTRON_RUN_AS_NODE=1 xvfb-run -a ./node_modules/electron/dist/electron ../tools/test/db-smoke.js
-          ELECTRON_RUN_AS_NODE=1 xvfb-run -a ./node_modules/electron/dist/electron ../tools/test/hwid-smoke.js
+      - name: Uji portal (tsc + build + route API + cek Supabase)
+        run: node tools/test/run-all.mjs portal
