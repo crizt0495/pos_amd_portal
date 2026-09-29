@@ -13,6 +13,8 @@ import { AlertCircle, LogIn, Sparkles, Store, User } from 'lucide-react';
 
 export const metadata: Metadata = { title: 'Masuk — KasirPro Portal' };
 
+export const runtime = 'edge';
+
 /** Informasi akun demo yang selalu ditampilkan di halaman login. */
 const DEMO_USER = { username: 'demo', password: 'toko12345' };
 

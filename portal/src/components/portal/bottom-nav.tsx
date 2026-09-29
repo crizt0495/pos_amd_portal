@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Home, KeyRound, User } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -13,7 +14,6 @@ const ITEMS = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
 
   return (
     <nav
@@ -25,12 +25,12 @@ export function BottomNav() {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href}>
-              <button
-                type="button"
-                onClick={() => router.push(href)}
+              <Link
+                href={href}
+                prefetch
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex w-full flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition',
+                  'flex w-full touch-manipulation flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition',
                   active ? 'text-zinc-900' : 'text-zinc-600',
                 )}
               >
@@ -43,7 +43,7 @@ export function BottomNav() {
                   <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.9} />
                 </span>
                 {label}
-              </button>
+              </Link>
             </li>
           );
         })}

@@ -1,5 +1,7 @@
 import { BottomNav } from '@/components/portal/bottom-nav';
 
+export const runtime = 'edge';
+
 /**
  * Layout terproteksi: proteksi route sudah ditangani middleware (mengalihkan
  * ke /login bila belum login). Layout ini tidak memanggil Supabase sama

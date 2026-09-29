@@ -21,9 +21,14 @@ export interface PortalSession {
 export const getPortalSession = cache(async (): Promise<PortalSession | null> => {
   const supabase = createClient();
 
+  // getSession() = decode JWT dari cookie (tanpa jaringan) saat token masih
+  // valid — menghemat 1 round-trip per halaman dibanding getUser(). Validasi
+  // sungguhan tetap terjadi di lapisan database (RLS menolak JWT tak valid),
+  // dan token kedaluwarsa akan di-refresh di sini / di middleware.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
   if (!user) return null;
 
   const { data: partnerRow } = await supabase
