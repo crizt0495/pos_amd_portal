@@ -184,8 +184,10 @@ export default async function LoginPage({
   var masuk = document.getElementById('btn-masuk');
   if (form && masuk) {
     var label = masuk.querySelector('span');
-    form.addEventListener('submit', function () {
-      if (masuk.disabled) return;
+    form.addEventListener('submit', function (e) {
+      /* Saat terkunci, batal-kan submit supaya tidak ada request kedua yang lolos
+         (mis. user menahan Enter saat server lambat). */
+      if (masuk.disabled) { if (e && e.preventDefault) e.preventDefault(); return; }
       masuk.disabled = true;
       masuk.setAttribute('data-loading', 'true');
       if (label) label.textContent = 'Memproses…';

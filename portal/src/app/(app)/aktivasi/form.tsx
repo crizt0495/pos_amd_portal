@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Segmented, Textarea } from '@/components/ui/form';
 import { Modal } from '@/components/ui/modal';
 import { bersihkanTelepon, rupiah } from '@/lib/format';
-import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
+import { cekAlamat, cekTelepon, hanyaDigit, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
 import { cn } from '@/lib/utils';
 import {
@@ -54,7 +54,12 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
     if (!namaValid(n)) return 'Nama minimal 3 karakter.';
     return '';
   }, [nama]);
-  const teleponError = React.useMemo(() => cekTelepon(telepon), [telepon]);
+  const teleponError = React.useMemo(() => {
+    // Telepon WAJIB, tapi pesan error baru muncul setelah ada isi (pola sama
+    // seperti Nama & Alamat) supaya field tidak merah sejak halaman dibuka.
+    if (hanyaDigit(telepon).length === 0) return '';
+    return cekTelepon(telepon);
+  }, [telepon]);
   const alamatError = React.useMemo(() => {
     const a = alamat.trim();
     if (a.length === 0) return '';
@@ -67,7 +72,7 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
     () =>
       quota > 0 &&
       namaValid(nama) &&
-      cekTelepon(telepon) === '' &&
+      cekTelepon(telepon, true) === '' &&
       cekAlamat(alamat) === '' &&
       Boolean(paket) &&
       Boolean(tipe),

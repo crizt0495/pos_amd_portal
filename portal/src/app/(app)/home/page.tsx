@@ -139,9 +139,10 @@ export default async function HomePage() {
 (function () {
   var form = document.getElementById('form-keluar');
   if (!form) return;
-  form.addEventListener('submit', function () {
+  form.addEventListener('submit', function (e) {
     var btn = form.querySelector('button');
-    if (!btn || btn.disabled) return;
+    /* Saat terkunci, batal-kan submit supaya tidak ada request kedua yang lolos. */
+    if (!btn || btn.disabled) { if (e && e.preventDefault) e.preventDefault(); return; }
     btn.disabled = true;
     window.setTimeout(function () { btn.disabled = false; }, 1500);
   });

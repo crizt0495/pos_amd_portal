@@ -13,12 +13,18 @@ export const hanyaDigit = (s: string) => s.replace(/\D/g, '');
 export const namaValid = (nama: string, min = 3) => nama.trim().length >= min;
 
 /**
- * Validasi no HP. Field opsional: kosong = tidak_error (tidak wajib diisi),
- * tapi bila diisi harus cocok pola 08xx.
+ * Validasi no HP.
+ *
+ * Default (`wajib` = false) dipakai field opsional seperti No HP di /profile:
+ * kosong = tidak error, tapi bila diisi harus cocok pola 08xx.
+ *
+ * Field wajib (mis. Telepon di /aktivasi) memakai `wajib: true` supaya kosong
+ * ikut dianggap salah — tanpa itu tombol Generate Key bisa aktif lalu ditolak
+ * server dengan 422.
  */
-export function cekTelepon(telepon: string): string {
+export function cekTelepon(telepon: string, wajib = false): string {
   const angka = hanyaDigit(telepon);
-  if (angka.length === 0) return '';
+  if (angka.length === 0) return wajib ? 'Nomor HP wajib diisi.' : '';
   if (!POLA_HP.test(angka)) return 'Nomor HP harus diawali 08 dan 10-13 digit (mis. 081234567890).';
   return '';
 }

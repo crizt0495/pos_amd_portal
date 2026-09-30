@@ -70,9 +70,12 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
     return cekAlamat(a);
   }, [alamat]);
 
+  // Nama toko wajib; No HP & Alamat opsional (bila diisi harus valid).
+  // Pakai hasil validasi di atas supaya opsionalitasnya benar-benar berlaku —
+  // memanggil cekAlamat() langsung di sini akan memaksa alamat terisi.
   const isFormValid = React.useMemo(
-    () => namaValid(namaToko) && cekTelepon(noHp) === '' && cekAlamat(alamat) === '',
-    [namaToko, noHp, alamat],
+    () => namaValid(namaToko) && noHpError === '' && alamatError === '',
+    [namaToko, noHpError, alamatError],
   );
 
   function pilihFile(file: File) {

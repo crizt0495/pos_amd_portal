@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/supabase/guard';
 import { generateSerialKey } from '@/lib/serial';
+import { POLA_HP, hanyaDigit } from '@/lib/validasi';
 import type { GenerateLicenseResponse, License } from '@/types';
 
 /**
@@ -16,14 +17,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const BodySchema = z.object({
-  nama: z.string().trim().min(2, 'Nama pembeli terlalu pendek').max(80),
+  nama: z.string().trim().min(3, 'Nama pembeli minimal 3 karakter').max(80),
+  // Pakai aturan yang sama dengan form (lib/validasi) supaya server tidak
+  // menerima nomor di luar pola 08xx walau request datang di luar UI.
   telepon: z
     .string()
     .trim()
-    .min(8, 'Nomor telepon tidak valid')
-    .max(20)
-    .regex(/^[0-9+\-\s]+$/, 'Nomor telepon tidak valid'),
-  alamat: z.string().trim().min(3, 'Alamat wajib diisi').max(240),
+    .min(1, 'Nomor HP wajib diisi')
+    .refine((v) => POLA_HP.test(hanyaDigit(v)), 'Nomor HP harus diawali 08 dan 10-13 digit (mis. 081234567890).'),
+  alamat: z.string().trim().min(10, 'Alamat minimal 10 karakter').max(240),
   paket: z.enum(['bundle', 'app_only']),
   tipe: z.enum(['sekali', 'langganan']),
 });
