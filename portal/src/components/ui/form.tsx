@@ -18,6 +18,40 @@ export const Textarea = React.forwardRef<
   return <textarea ref={ref} className={cn('field-textarea', className)} rows={3} {...props} />;
 });
 
+/**
+ * Input nomor telepon — hanya menerima angka.
+ *
+ * Tiga lapis pertahanan, karena `inputMode` saja tidak cukup:
+ * 1. `inputMode="numeric"` → keyboard HP langsung numeric, bukan ada tombol huruf.
+ * 2. Saring di `onChange` → karakter yang lolos dari keyboard atau dari paste
+ *    (mis. "0812-3456-abc" ditempel dari WA) langsung dibuang, bukan baru
+ *    ditolak saat submit. Value yang tampil selalu bersih.
+ * 3. `pattern="[0-9]*"` → petunjuk untuk browser & pembantu aksesibilitas.
+ *
+ * `maxLength` (default 15) memotong di sisi input, bukan karena error.
+ */
+export const InputTelepon = React.forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'maxLength' | 'type'> & {
+    onChange: (v: string) => void;
+    maxLength?: number;
+  }
+>(function InputTelepon({ className, onChange, maxLength = 15, ...props }, ref) {
+  return (
+    <input
+      ref={ref}
+      type="tel"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="tel"
+      maxLength={maxLength}
+      className={cn('field-input', className)}
+      {...props}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+    />
+  );
+});
+
 export function Field({
   label,
   hint,

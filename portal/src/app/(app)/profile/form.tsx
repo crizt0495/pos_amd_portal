@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Field, Input, Textarea } from '@/components/ui/form';
+import { Field, Input, InputTelepon, Textarea } from '@/components/ui/form';
 import { bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
@@ -158,14 +158,11 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
         </Field>
 
         <Field label="No HP" htmlFor="no_hp" error={noHpError} hint="Opsional, contoh: 081234567890">
-          <Input
+          <InputTelepon
             id="no_hp"
-            type="tel"
-            inputMode="tel"
             placeholder="08xxxxxxxxxx"
             value={noHp}
-            onChange={(e) => setNoHp(e.target.value)}
-            maxLength={15}
+            onChange={setNoHp}
             aria-invalid={Boolean(noHpError)}
             className={cn(noHpError && 'input-invalid')}
           />

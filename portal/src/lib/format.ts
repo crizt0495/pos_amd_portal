@@ -63,7 +63,14 @@ export function inisial(nama: string | null | undefined): string {
     .join('');
 }
 
-/** Nomor telepon: hanya digit/plus, maksimal 15 karakter. */
+/**
+ * Nomor telepon: hanya digit, maksimal 15 karakter.
+ *
+ * Semua karakter lain (huruf, spasi, `-`, `+`) dibuang. Ini lapisan terakhir —
+ * `InputTelepon` sudah menyaring saat mengetik, dan zod di API route sudah
+ * menolak, tapi fungsi ini dipakai lagi tepat sebelum request dikirim supaya
+ * data yang tersimpan ke database dijamin angka murni.
+ */
 export function bersihkanTelepon(v: string): string {
-  return (v ?? '').replace(/[^0-9+]/g, '').slice(0, 15);
+  return (v ?? '').replace(/\D/g, '').slice(0, 15);
 }

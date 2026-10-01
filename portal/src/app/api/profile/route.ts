@@ -14,7 +14,13 @@ export const dynamic = 'force-dynamic';
 
 const BodySchema = z.object({
   nama_toko: z.string().trim().min(2, 'Nama toko terlalu pendek').max(80),
-  no_hp: z.string().trim().max(20).regex(/^[0-9+\-\s]*$/, 'Nomor HP tidak valid'),
+  // Hanya digit. Server menolak karakter apa pun (huruf, spasi, `-`, `+`) walau
+  // request datang langsung, bukan dari UI.
+  no_hp: z
+    .string()
+    .trim()
+    .max(15, 'Nomor HP maksimal 15 digit')
+    .regex(/^\d*$/, 'Nomor HP hanya boleh berisi angka'),
   alamat: z.string().trim().max(240),
 });
 

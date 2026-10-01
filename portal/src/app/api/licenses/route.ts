@@ -20,10 +20,14 @@ const BodySchema = z.object({
   nama: z.string().trim().min(3, 'Nama pembeli minimal 3 karakter').max(80),
   // Pakai aturan yang sama dengan form (lib/validasi) supaya server tidak
   // menerima nomor di luar pola 08xx walau request datang di luar UI.
+  // `.regex(/^\d*$/)` menolak karakter non-digit lebih dulu — `hanyaDigit`
+  // di refine berikutnya hanya memeriksa pola 08xx, jadi tanpa regex ini
+  // "08ab1234567890" akan lolos setelah hurufnya dibuang.
   telepon: z
     .string()
     .trim()
     .min(1, 'Nomor HP wajib diisi')
+    .regex(/^\d+$/, 'Nomor HP hanya boleh berisi angka')
     .refine((v) => POLA_HP.test(hanyaDigit(v)), 'Nomor HP harus diawali 08 dan 10-13 digit (mis. 081234567890).'),
   alamat: z.string().trim().min(10, 'Alamat minimal 10 karakter').max(240),
   paket: z.enum(['bundle', 'app_only']),

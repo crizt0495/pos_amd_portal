@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, Check, Copy, KeyRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Field, Input, Segmented, Textarea } from '@/components/ui/form';
+import { Field, Input, InputTelepon, Segmented, Textarea } from '@/components/ui/form';
 import { Modal } from '@/components/ui/modal';
 import { bersihkanTelepon, rupiah } from '@/lib/format';
 import { cekAlamat, cekTelepon, hanyaDigit, namaValid } from '@/lib/validasi';
@@ -166,14 +166,11 @@ export default function AktivasiForm({ quota }: Props) {
         </Field>
 
         <Field label="Telepon" htmlFor="telepon" error={teleponError}>
-          <Input
+          <InputTelepon
             id="telepon"
-            type="tel"
-            inputMode="tel"
             placeholder="08xxxxxxxxxx"
             value={telepon}
-            onChange={(e) => setTelepon(e.target.value)}
-            maxLength={15}
+            onChange={setTelepon}
             aria-invalid={Boolean(teleponError)}
             className={cn(teleponError && 'input-invalid')}
           />
