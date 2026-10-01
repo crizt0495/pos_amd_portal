@@ -31,8 +31,8 @@ interface Props {
 
 /** Warna bulatan icon toko mengikuti tier toko (Bronze → Platinum). */
 const TIER_ICON_BG: Record<TierName, string> = {
-  Bronze: 'bg-amber-700',
-  Silver: 'bg-gray-400',
+  Bronze: 'bg-amber-800',
+  Silver: 'bg-zinc-400',
   Gold: 'bg-yellow-500',
   Platinum: 'bg-slate-800',
 };
