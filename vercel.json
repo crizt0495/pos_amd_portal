@@ -1,7 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "projectSettings": {
-    "rootDirectory": "portal"
-  }
+  "framework": "nextjs"
 }

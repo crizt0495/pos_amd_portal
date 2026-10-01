@@ -267,18 +267,34 @@ Runner: [`tools/test/run-all.mjs`](./tools/test/run-all.mjs). Yang dijalankan:
 
 Deploy sudah **selesai dan terverifikasi live** di
 **<https://pos-amd-portal.vercel.app>** (tautan otomatis).
-Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
+Pengaturan proyek di sisi Vercel (Dashboard → Project → Settings):
 
-- **Root Directory**: `portal`  (`"projectSettings": { "rootDirectory": "portal" }`)
+- **Root Directory**: `portal`  ← sudah diatur di Dashboard, bukan di repo
 - Framework preset: **Next.js**
 - Env vars (production/preview/development): `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
   `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_NAME`
+- Git integration: repo `crizt0495/pos_amd_portal`, production branch `main`
 
-**Auto-deploy otomatis (GitHub Actions)** — workflow `.github/workflows/deploy-vercel.yml`
-langsung men-deploy ke production setiap push ke `main` yang menyentuh folder `portal/`.
+### Auto-deploy: lewat Vercel Git integration (yang dipakai)
 
-Aktifkan sekali dengan membuat **satu secret** di repo
+Repo sudah terhubung ke Vercel, jadi **setiap push ke `main` otomatis
+di-deploy ke production oleh Vercel sendiri**. Tidak perlu GitHub Actions,
+tidak perlu secret apa pun.
+
+> `projectSettings.rootDirectory` **sengaja tidak ada** di `vercel.json`.
+> Vercel hanya menerima `rootDirectory` dari project settings; meletakkannya
+> di `vercel.json` membuat build Git gagal dengan `errorLink` ke dokumentasi
+> project-configuration, sementara deploy via CLI tetap hijau — persis pola
+> "hijau tapi tidak ter-deploy" yang sebelumnya kita kebingungan.
+
+### Workflow GitHub Actions (opsional, tidak dipakai)
+
+`.github/workflows/deploy-vercel.yml` masih ada sebagai jalur manual
+alternatif. Job-nya `continue-on-error` dan selalu mencetak warning kalau
+`VERCEL_TOKEN` kosong, jadi tidak pernah terlihat sukses padahal skip.
+
+Kalau nanti benar-benar dipakai, buat satu secret di
 (`Settings → Secrets and variables → Actions → New repository secret`):
 
 ```
@@ -286,23 +302,21 @@ Name : VERCEL_TOKEN
 Value: token dari https://vercel.com/account/settings/tokens
 ```
 
-Org & Project ID sudah tertanam di workflow (bukan rahasia). Selama `VERCEL_TOKEN`
-belum diisi, step deploy otomatis di-*skip* tanpa error.
+> Jangan aktifkan Vercel Git integration **dan** workflow ini bersamaan —
+> satu push akan menghasilkan dua deployment ke production yang saling
+> menimpa.
 
-Untuk deploy manual:
+### Deploy manual
 
 ```bash
 npm run deploy          # WAJIB dari ROOT repo (bukan dari dalam portal/)
-                        # = vercel deploy --prod dari root; memakai vercel.json
 npm run deploy:preview  # deployment preview (opsional)
-git push origin main     # (jika Git auto-deploy diaktifkan di Dashboard Vercel)
 ```
 
 > **Jangan** menjalankan `vercel deploy` dari dalam folder `portal/` — karena
 > Root Directory proyek sudah `portal`, upload dari situ membuat Vercel mencari
 > `portal/portal` dan gagal ("Root Directory 'portal' does not exist").
-> Selalu deploy dari root repo, atau aktifkan Git auto-deploy di
-> Dashboard → Project → Settings → Git.
+> Selalu deploy dari root repo.
 
 `.vercelignore` di root repo mencegah file berat (node_modules, dist, release,
 .next) ikut terunggah ke Vercel.
@@ -352,7 +366,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | # | Langkah | Catatan |
 | --- | --- | --- |
 | 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email) |
-| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di <https://pos-amd-portal.vercel.app> (vercel.json sudah mengatur root dir `portal`) |
+| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di <https://pos-amd-portal.vercel.app> (root dir `portal` diatur di Dashboard; `vercel.json` tidak override) |
 
 ---
 
