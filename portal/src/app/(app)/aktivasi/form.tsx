@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Check, Copy, KeyRound, Package, Sparkles, Wallet } from 'lucide-react';
+import { AlertCircle, Check, Copy, KeyRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Field, Input, Segmented, Textarea } from '@/components/ui/form';
@@ -11,22 +11,16 @@ import { bersihkanTelepon, rupiah } from '@/lib/format';
 import { cekAlamat, cekTelepon, hanyaDigit, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
 import { cn } from '@/lib/utils';
-import {
-  BASE_COMMISSION,
-  LICENSE_TYPE_LABEL,
-  PAKET_LABEL,
-  PAKET_LABEL_PANJANG,
-  PAKET_PRICE,
-  tierOf,
-} from '@/lib/commission';
+import { LICENSE_TYPE_LABEL, PAKET_LABEL } from '@/lib/commission';
 import type { License, LicenseType, PaketType } from '@/types';
 
 interface Props {
+  /** Sisa kuota lisensi. Tidak ditampilkan di halaman — hanya dipakai untuk
+      menonaktifkan tombol Generate saat kuota habis. */
   quota: number;
-  totalTerjual: number;
 }
 
-export default function AktivasiForm({ quota, totalTerjual }: Props) {
+export default function AktivasiForm({ quota }: Props) {
   const router = useRouter();
 
   const [nama, setNama] = React.useState('');
@@ -43,9 +37,6 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
   const generate = useButtonGuard();
   const aksiModal = useClickCooldown(1500);
   const loading = generate.busy;
-
-  const tier = tierOf(totalTerjual);
-  const komisiPerKey = Math.round(BASE_COMMISSION[paket] * tier.rate);
 
   /* ----------------------------- validasi ----------------------------- */
   const namaError = React.useMemo(() => {
@@ -160,37 +151,6 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
         </p>
       </header>
 
-      <section className="mb-4 grid grid-cols-2 gap-2.5">
-        <div className="card-soft px-3 py-3">
-          <div className="flex items-center gap-1.5 text-zinc-500">
-            <Wallet className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide">Harga</span>
-          </div>
-          <p className="tabular mt-1 text-[16px] font-bold text-zinc-900">
-            {rupiah(PAKET_PRICE[paket])}
-          </p>
-          <p className="text-[10px] text-zinc-500">{PAKET_LABEL_PANJANG[paket]}</p>
-        </div>
-        <div className="card-soft px-3 py-3">
-          <div className="flex items-center gap-1.5 text-zinc-500">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide">Komisi</span>
-          </div>
-          <p className="tabular mt-1 text-[16px] font-bold text-zinc-900">{rupiah(komisiPerKey)}</p>
-          <p className="text-[10px] text-zinc-500">
-            Tier {tier.name} · {tier.rate * 100}%
-          </p>
-        </div>
-      </section>
-
-      <section className="mb-5 flex items-center justify-between rounded-2xl bg-zinc-900 px-4 py-3 text-white">
-        <div>
-          <p className="text-[11px] text-zinc-400">Sisa Kuota Lisensi</p>
-          <p className="tabular text-[20px] font-bold leading-tight">{quota} key</p>
-        </div>
-        <Package className="h-6 w-6 text-zinc-500" />
-      </section>
-
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <Field label="Nama" htmlFor="nama" error={namaError}>
           <Input
@@ -262,7 +222,12 @@ export default function AktivasiForm({ quota, totalTerjual }: Props) {
           </div>
         ) : null}
 
-        <Button type="submit" loading={loading} disabled={!isFormValid} className="mt-1">
+        <Button
+          type="submit"
+          loading={loading}
+          disabled={!isFormValid}
+          className="mt-1 w-full !bg-black py-3.5"
+        >
           <KeyRound className="h-4 w-4" />
           {loading ? 'Membuat Serial Key…' : 'Generate Key'}
         </Button>

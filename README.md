@@ -36,7 +36,7 @@ PWA **mobile only**: `max-w-[430px]` di tengah, background putih, Bottom Nav tet
 | Menu | Isi |
 | --- | --- |
 | **Home** | Header `Home` + `Nama Toko ->` + ikon logout. Kartu 3 kolom `[sisa/jatah Sisa] [n Bundle] [n Aplikasi]`, kartu hitam **Total Komisi**, daftar **Riwayat Komisi** (baris 1: tanggal - paket - nama konsumen, baris 2 kanan: nominal komisi) |
-| **Aktivasi** | Judul **Generate Serial Key**. Form: Nama, Telepon, Alamat, Pilih Paket (Bundle / Aplikasi Saja), Pilih Pilihan (Sekali / Langganan), tombol hitam **Generate Key**. Sukses → modal **Selamat Generate Key Berhasil** + kode + `Silahkan aktivasi ke Komputer Kasir` + tombol **Copy & Tutup** |
+| **Aktivasi** | Langsung form, tanpa kartu harga/komisi/kuota di atas. Judul **Generate Serial Key**. Form: Nama, Telepon, Alamat, Pilih Paket (Bundle / Aplikasi Saja), Pilih Pilihan (Sekali / Langganan), tombol hitam **Generate Key**. Sukses → modal **Selamat Generate Key Berhasil** + kode + `Silahkan aktivasi ke Komputer Kasir` + tombol **Copy & Tutup**. Info harga/komisi/kuota ada di halaman **Home** dan **Profile** |
 | **Profile** | Icon toko bulat (warna ikut tier) + Nama Toko di bawahnya, lalu form Nama Toko, No HP, Alamat, tombol **Simpan** (sticky di HP). Section **Penghargaan Title**: 4 mahkota Bronze/Silver/Gold/Platinum, yang aktiffull opacity, lainnya 30% |
 
 Kartu Home:
