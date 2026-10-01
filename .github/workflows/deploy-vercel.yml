@@ -67,7 +67,7 @@ jobs:
 
       - name: Deploy ke Vercel (production)
         if: steps.check.outputs.ready == 'yes'
-        run: npx --yes vercel deploy --prod --yes
+        run: npx --yes vercel deploy --prod --yes --token "$VERCEL_TOKEN"
 
       - name: Laporkan hasil
         if: always()
