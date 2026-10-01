@@ -35,7 +35,7 @@ PWA **mobile only**: `max-w-[430px]` di tengah, background putih, Bottom Nav tet
 | --- | --- |
 | **Home** | Header `Home` + `Nama Toko ->` + ikon logout. Kartu 3 kolom `[sisa/jatah Sisa] [n Bundle] [n Aplikasi]`, kartu hitam **Total Komisi**, daftar **Riwayat Komisi** (baris 1: tanggal - paket - nama konsumen, baris 2 kanan: nominal komisi) |
 | **Aktivasi** | Judul **Generate Serial Key**. Form: Nama, Telepon, Alamat, Pilih Paket (Bundle / Aplikasi Saja), Pilih Pilihan (Sekali / Langganan), tombol hitam **Generate Key**. Sukses → modal **Selamat Generate Key Berhasil** + kode + `Silahkan aktivasi ke Komputer Kasir` + tombol **Copy & Tutup** |
-| **Profile** | Upload **Logo Toko** (Supabase Storage), Nama Toko, No HP, Alamat. Section **Penghargaan Title**: 4 mahkota Bronze/Silver/Gold/Platinum, yang aktiffull opacity, lainnya 30% |
+| **Profile** | Icon toko bulat (warna ikut tier) + Nama Toko di bawahnya, lalu form Nama Toko, No HP, Alamat, tombol **Simpan** (sticky di HP). Section **Penghargaan Title**: 4 mahkota Bronze/Silver/Gold/Platinum, yang aktiffull opacity, lainnya 30% |
 
 Kartu Home:
 - `sisa/jatah` = `license_quota` / (`license_quota` + `total_terjual`) → awal `5/5`, habis 1 key jadi `4/5`
@@ -89,7 +89,7 @@ NEXT_PUBLIC_APP_NAME=KasirPro Portal
 2. Tempel seluruh isi [`portal/supabase/schema.sql`](./portal/supabase/schema.sql) → **Run**
 
 Schema itu membuat: tabel `partners` & `licenses`, function `generate_license()` /
-`activate_license()`, RLS per-partner, storage bucket `store-logos`, dan trigger
+`activate_license()`, RLS per-partner, dan trigger
 `on_auth_user_created` (auto buat baris `partners` begitu user dibuat, kuota 5).
 Aman dijalankan berulang (idempotent) dan sudah termasuk migrasi kolom versi lama.
 
@@ -145,7 +145,7 @@ memberi tahu persis apa yang masih kurang.
 ```sql
 partners(
   id uuid, user_id uuid -> auth.users, email text unique,
-  nama_toko text, no_hp text, alamat text, logo_url text,
+  nama_toko text, no_hp text, alamat text,
   license_quota int default 5,   -- sisa jatah
   total_terjual int default 0,  -- dasar tier
   komisi_total int, status text, created_at, updated_at
@@ -263,7 +263,7 @@ Runner: [`tools/test/run-all.mjs`](./tools/test/run-all.mjs). Yang dijalankan:
 
 ## 6. Cara deploy
 
-Deploy sudah **selesai dan terverifikasi live** pada `https://pos-amd.vercel.app`.
+Deploy sudah **selesai dan terverifikasi live** pada `https://pos-amd-portal.vercel.app`.
 Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
 
 - **Root Directory**: `portal`  (`"projectSettings": { "rootDirectory": "portal" }`)
@@ -308,9 +308,9 @@ Hasil verifikasi terhadap domain produksi (tidak pakai localhost sama sekali):
 
 - `GET /  → 307 → /login` | `/login` 200 | `/manifest.json` 200 |
   `/icons/icon-192.png` 200 | `/sw.js` 200
-- Round-trip API penuh (login → generate → aktivasi → mismatch → profil → logo):
+- Round-trip API penuh (login → generate → aktivasi → mismatch → profil):
   **30/30 lulus**
-- API aktivasi melawan `https://pos-amd.vercel.app`: **17/17 lulus**
+- API aktivasi melawan `https://pos-amd-portal.vercel.app`: **17/17 lulus**
 
 ---
 
@@ -338,7 +338,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | `portal`: `next build` | sukses (12 route, service worker ke `public/sw.js`) |
 | `portal`: `check:supabase` | **hijau semua** (env, kunci, tabel, 4 RPC, bucket, toko terdaftar) |
 | `portal`: round-trip API asli vs Supabase (login GoTrue → generate key → komisi tier → aktivasi → ALREADY_ACTIVE → HWID_MISMATCH → INVALID_KEY → profil → upload logo → kuota/komisi) | **30/30 lulus** |
-| `portal`: **deploy Vercel live** — `https://pos-amd.vercel.app` (login, PWA manifest/icon/sw, generate, aktivasi, HWID mismatch, profil, logo) | **round-trip 30/30 + rute PWA 200** |
+| `portal`: **deploy Vercel live** — `https://pos-amd-portal.vercel.app` (login, PWA manifest/icon/sw, generate, aktivasi, HWID mismatch, profil) | **round-trip 30/30 + rute PWA 200** |
 | **Portal: Lighthouse** (login/home/aktivasi/profile, mobile) | **A11y 100 · Best Practices 100 · SEO 100** di semua halaman; Performance 98–100 (turunan Next.js runtime) |
 | **Portal: responsif semua perangkat** (375 · 768 · 1366 · 1920 px × 4 halaman) | **16/16 lulus** — tanpa overflow horizontal, kolom terkunci tengah, bottom nav selalu terlihat |
 | **GitHub Actions CI** | **passing** (typecheck portal, build, tes statis, Supabase) |
@@ -349,7 +349,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | # | Langkah | Catatan |
 | --- | --- | --- |
 | 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email) |
-| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
+| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd-portal.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
 
 ---
 

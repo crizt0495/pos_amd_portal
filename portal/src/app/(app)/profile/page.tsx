@@ -28,7 +28,6 @@ export default async function ProfilePage() {
         nama_toko: partner?.nama_toko ?? '',
         no_hp: partner?.no_hp ?? '',
         alamat: partner?.alamat ?? '',
-        logo_url: partner?.logo_url ?? null,
       }}
       email={user.email}
       totalTerjual={partner?.total_terjual ?? 0}

@@ -161,7 +161,7 @@ if (run('portal') || run('all')) {
   assert('next build sukses', build.ok, build.out);
   hasFile('service worker PWA ter-generate', 'portal/public/sw.js');
 
-  for (const r2 of ['/api/activate', '/api/licenses', '/api/profile', '/api/profile/logo']) {
+  for (const r2 of ['/api/activate', '/api/licenses', '/api/profile']) {
     const routeFile = path.join(PORTAL, 'src', 'app', r2, 'route.ts');
     assert(`route ${r2} ada`, fs.existsSync(routeFile), routeFile);
   }

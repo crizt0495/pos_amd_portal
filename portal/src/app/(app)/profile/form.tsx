@@ -5,32 +5,37 @@ import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Award,
-  Camera,
   Check,
   Crown,
-  Loader2,
   LogOut,
   Medal,
   Save,
-  Trash2,
+  Store,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/form';
-import { bersihkanTelepon, inisial } from '@/lib/format';
+import { bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
 import { TIER_RULES, tierOf, tierRangeLabel } from '@/lib/commission';
+import type { TierName } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
-  initial: { nama_toko: string; no_hp: string; alamat: string; logo_url: string | null };
+  initial: { nama_toko: string; no_hp: string; alamat: string };
   email: string;
   totalTerjual: number;
   quota: number;
 }
 
-const MAX_LOGO = 2 * 1024 * 1024; // 2 MB
+/** Warna bulatan icon toko mengikuti tier toko (Bronze → Platinum). */
+const TIER_ICON_BG: Record<TierName, string> = {
+  Bronze: 'bg-amber-700',
+  Silver: 'bg-gray-400',
+  Gold: 'bg-yellow-500',
+  Platinum: 'bg-slate-800',
+};
 
 export default function ProfileForm({ initial, email, totalTerjual, quota }: Props) {
   const router = useRouter();
@@ -38,20 +43,14 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
   const [namaToko, setNamaToko] = React.useState(initial.nama_toko);
   const [noHp, setNoHp] = React.useState(initial.no_hp);
   const [alamat, setAlamat] = React.useState(initial.alamat);
-  const [logoUrl, setLogoUrl] = React.useState(initial.logo_url);
-  const [preview, setPreview] = React.useState<string | null>(null);
 
   const [message, setMessage] = React.useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
-  /* Penjaga klik-ganda: 1 klik = 1 permintaan, tombol terkunci 1,5 detik.
-     Simpan & Upload logo punya kunci masing-masing supaya tak saling menghalangi. */
+  /* Penjaga klik-ganda: 1 klik = 1 permintaan, tombol terkunci 1,5 detik. */
   const simpan = useButtonGuard();
-  const unggah = useButtonGuard();
   const ui = useClickCooldown(1500);
   const saving = simpan.busy;
-  const uploading = unggah.busy;
 
-  const fileRef = React.useRef<HTMLInputElement>(null);
   const tier = tierOf(totalTerjual);
 
   /* ----------------------------- validasi ----------------------------- */
@@ -77,53 +76,6 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
     () => namaValid(namaToko) && noHpError === '' && alamatError === '',
     [namaToko, noHpError, alamatError],
   );
-
-  function pilihFile(file: File) {
-    setMessage(null);
-
-    if (!file.type.startsWith('image/')) {
-      setMessage({ tone: 'error', text: 'File harus berupa gambar (PNG/JPG/WebP).' });
-      return;
-    }
-    if (file.size > MAX_LOGO) {
-      setMessage({ tone: 'error', text: 'Ukuran logo maksimal 2 MB.' });
-      return;
-    }
-
-    void unggah.guard(() => onUpload(file), {
-      pesanTunggu: 'Logo sedang diunggah…',
-      onBlocked: (pesan) => setMessage({ tone: 'error', text: pesan }),
-      onError: (err) =>
-        setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal mengunggah.' }),
-    });
-  }
-
-  async function onUpload(file: File) {
-    setPreview(URL.createObjectURL(file));
-
-    try {
-      const fd = new FormData();
-      fd.append('logo', file);
-
-      const res = await fetch('/api/profile/logo', { method: 'POST', body: fd });
-      const json = (await res.json()) as { ok: boolean; url?: string; message?: string };
-
-      if (!res.ok || !json.ok || !json.url) {
-        setMessage({ tone: 'error', text: json.message || 'Gagal mengunggah logo.' });
-        setPreview(null);
-        return;
-      }
-
-      setLogoUrl(json.url);
-      setMessage({ tone: 'ok', text: 'Logo toko diperbarui.' });
-      router.refresh();
-    } catch (err) {
-      setMessage({ tone: 'error', text: err instanceof Error ? err.message : 'Gagal mengunggah.' });
-      setPreview(null);
-    } finally {
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  }
 
   function onSave(e: React.FormEvent) {
     e.preventDefault();
@@ -178,66 +130,17 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
         <p className="mt-2 text-[13px] text-zinc-500">Data toko &amp; penghargaan komisi Anda.</p>
       </header>
 
-      {/* Logo toko */}
-      <section className="mb-6 flex flex-col items-center">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          data-loading={uploading}
-          aria-label={`${inisial(namaToko || email)} — Ubah logo toko`}
-          className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-zinc-100 ring-1 ring-zinc-200"
-        >
-          {preview || logoUrl ? (
-            // URL logo berasal dari Supabase Storage (host tetap dikontrol schema)
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={(preview ?? logoUrl) as string}
-              alt=""
-              aria-hidden="true"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <span aria-hidden="true" className="text-[26px] font-bold text-zinc-400">
-              {inisial(namaToko || email)}
-            </span>
+      {/* Icon toko statis — warna bulatan mengikuti tier. */}
+      <section className="mb-6 flex flex-col items-center py-6">
+        <div
+          className={cn(
+            'grid h-24 w-24 place-items-center rounded-full',
+            TIER_ICON_BG[tier.name],
           )}
-          <span className="absolute inset-0 grid place-items-center bg-black/45 text-white">
-            {uploading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <Camera className="h-6 w-6" />
-            )}
-          </span>
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            // Pilih file yang sama dua kali harus tetap bisa (kunci ada di aksi, bukan di input).
-            if (f) pilihFile(f);
-          }}
-        />
-        <p className="mt-2 text-[12px] text-zinc-500">Ketuk untuk upload logo toko (maks. 2 MB)</p>
-        {logoUrl ? (
-          <button
-            type="button"
-            onClick={() =>
-              ui.run(() => {
-                setLogoUrl(null);
-                setPreview(null);
-                setMessage({ tone: 'ok', text: 'Simpan profil untuk menerapkan logo kosong.' });
-              }, 'hapus-logo')
-            }
-            disabled={ui.locked('hapus-logo')}
-            className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-zinc-500"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Hapus logo
-          </button>
-        ) : null}
+        >
+          <Store size={48} className="text-white" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-sm text-gray-500">{namaToko.trim() || 'DEMO Toko Berkah'}</p>
       </section>
 
       {/* Form toko */}
@@ -280,12 +183,8 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           />
         </Field>
 
-        <Button type="submit" loading={saving} disabled={!isFormValid} className="h-14">
-          <Save className="h-4 w-4" />
-          {saving ? 'Menyimpan…' : 'Simpan'}
-        </Button>
-
-        <div className="-mt-1 rounded-xl bg-gray-50 px-3.5 py-3 text-[12px] text-zinc-500">
+        {/* Info akun: read-only, jadi dikotak agar jelas bukan bagian form. */}
+        <div className="rounded-xl bg-gray-50 p-4 text-[12px] text-zinc-500">
           <div className="flex items-center justify-between">
             <span>Email akun</span>
             <span className="font-semibold text-zinc-700">{email}</span>
@@ -299,6 +198,18 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
             <span className="tabular font-semibold text-zinc-700">{quota} key</span>
           </div>
         </div>
+
+        {/* Sticky: di HP tombol nempel 80px di atas BottomNav (fixed),
+            jadi tak perlu scroll jauh cuma untuk menekan Simpan. */}
+        <Button
+          type="submit"
+          loading={saving}
+          disabled={!isFormValid}
+          className="sticky bottom-[80px] z-10 h-14 w-full !bg-black"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? 'Menyimpan…' : 'Simpan'}
+        </Button>
 
         {message ? (
           <div

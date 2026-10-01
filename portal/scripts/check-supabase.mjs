@@ -8,7 +8,7 @@
  *    2. Kunci bisa dipakai (auth)
  *    3. Tabel partners & licenses ada
  *    4. RPC generate_license & activate_license ada (dicek TANPA mengubah data)
- *    5. Bucket storage store-logos ada
+ *    5. Data toko
  *
  *  Jalankan:
  *      npm run check:supabase
@@ -186,16 +186,7 @@ console.log('\n4. Fungsi RPC');
   else bad(`RPC activate_license() error: ${res.status} ${res.body?.message || res.raw}`);
 }
 
-console.log('\n5. Storage (logo toko)');
-{
-  const res = await fetch(`${url.replace(/\/+$/, '')}/storage/v1/bucket/store-logos`, {
-    headers: { apikey: secret, Authorization: `Bearer ${secret}` },
-  });
-  if (res.status === 200) ok('Bucket storage "store-logos" ada');
-  else bad('Bucket "store-logos" belum ada — jalankan supabase/schema.sql (bagian 10)');
-}
-
-console.log('\n6. Data toko');
+console.log('\n5. Data toko');
 {
   const res = await rest('/partners?select=id,email,username,nama_toko,license_quota,total_terjual&limit=20');
   const rows = Array.isArray(res.body) ? res.body : [];

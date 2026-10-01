@@ -25,6 +25,8 @@ create table if not exists public.partners (
   nama_toko       text        not null,
   no_hp           text,
   alamat          text,
+  -- tidak lagi dipakai (fitur upload logo dihapus); dibiarkan agar schema.sql
+  -- tetap idempotent untuk database yang sudah terlanjur punya kolom ini
   logo_url        text,
   -- jatah lisensi yang masih boleh dibuat (default 5, habis tiap generate key)
   license_quota   integer     not null default 5 check (license_quota >= 0),
@@ -474,19 +476,15 @@ grant execute on function public.tier_rate_of(integer) to anon, authenticated, s
 grant execute on function public.tier_name_of(integer) to anon, authenticated, service_role;
 grant execute on function public.base_commission_of(text) to anon, authenticated, service_role;
 
--- ---------------------------------------------------------------------------
--- 10. Storage bucket untuk logo toko
--- ---------------------------------------------------------------------------
-insert into storage.buckets (id, name, public)
-values ('store-logos', 'store-logos', true)
-on conflict (id) do update set public = true;
-
-drop policy if exists "logos_public_read" on storage.objects;
-create policy "logos_public_read" on storage.objects
-  for select using (bucket_id = 'store-logos');
+-- Catatan: bucket storage `store-logos` tidak lagi dipakai — fitur upload logo
+-- toko sudah dihapus (portal memakai icon toko statis). Bucket di database yang
+-- sudah terlanjur ada boleh dibuang lewat SQL Editor:
+--     drop policy if exists "logos_public_read" on storage.objects;
+--     delete from storage.objects where bucket_id = 'store-logos';
+--     delete from storage.buckets where id = 'store-logos';
 
 -- ---------------------------------------------------------------------------
--- 11. SETUP TOKO
+-- 10. SETUP TOKO
 --     Daftarkan akun lebih dulu di:
 --       Supabase Dashboard > Authentication > Users > Add user
 --       (centang "Auto Confirm User" supaya bisa langsung login)

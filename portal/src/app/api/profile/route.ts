@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/supabase/guard';
 
 /**
- * PATCH /api/profile — ubah data toko (nama, no HP, alamat, logo).
+ * PATCH /api/profile — ubah data toko (nama, no HP, alamat).
  * Menulis lewat sesi user sehingga RLS (`partners_update_own`) yang mengunci akses.
  */
 
@@ -16,7 +16,6 @@ const BodySchema = z.object({
   nama_toko: z.string().trim().min(2, 'Nama toko terlalu pendek').max(80),
   no_hp: z.string().trim().max(20).regex(/^[0-9+\-\s]*$/, 'Nomor HP tidak valid'),
   alamat: z.string().trim().max(240),
-  logo_url: z.string().url().max(500).nullable().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -46,7 +45,6 @@ export async function PATCH(req: Request) {
     no_hp: parsed.data.no_hp || null,
     alamat: parsed.data.alamat || null,
   };
-  if (parsed.data.logo_url !== undefined) payload.logo_url = parsed.data.logo_url;
 
   const { error } = await supabase
     .from('partners')

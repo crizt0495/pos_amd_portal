@@ -28,6 +28,7 @@ export interface Partner {
   nama_toko: string;
   no_hp: string | null;
   alamat: string | null;
+  /** Tidak lagi dipakai — kolomnya sisa fitur upload logo. */
   logo_url: string | null;
   license_quota: number;
   total_terjual: number;

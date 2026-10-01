@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy production (pos-amd.vercel.app)
+    name: Deploy production (pos-amd-portal.vercel.app)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
