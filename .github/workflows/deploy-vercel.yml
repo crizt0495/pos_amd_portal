@@ -8,6 +8,9 @@
 #            https://vercel.com/account/settings/tokens  (buat token baru)
 #
 #  Org & Project ID sudah terpasang (bukan rahasia), jadi cukup 1 secret.
+#  projectId di bawah harus sama dengan .vercel/project.json proyek
+#  "pos-amd-portal" — kalau tidak, deploy tetap sukses tapi domainnya
+#  tidak ikut berubah.
 #  Sebelum VERCEL_TOKEN diisi, step deploy otomatis di-SKIP (tidak error).
 # =============================================================================
 name: Deploy portal ke Vercel
@@ -32,12 +35,15 @@ concurrency:
 jobs:
   deploy:
     name: Deploy production (pos-amd-portal.vercel.app)
+    # Step deploy di-skip kalau VERCEL_TOKEN belum ada. Pakai continue-on-error
+    # supaya job tidak dilaporkan "hijau" padahal tidak ada yang ter-deploy.
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_1kqnB2pZeH0WBhuUGvqje7UL
-      VERCEL_PROJECT_ID: prj_ReZTLGxBSRmegaC5tnoeXR035Fpb
+      VERCEL_PROJECT_ID: prj_AcOTdmNkGN6J2zsQXu6qqqDV0Po9
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,3 +68,14 @@ jobs:
       - name: Deploy ke Vercel (production)
         if: steps.check.outputs.ready == 'yes'
         run: npx --yes vercel deploy --prod --yes
+
+      - name: Laporkan hasil
+        if: always()
+        run: |
+          if [ "${{ steps.check.outputs.ready }}" = 'yes' ]; then
+            echo "Deploy dijalankan. Cek https://pos-amd-portal.vercel.app"
+          else
+            echo "::warning::VERCEL_TOKEN belum di-set — TIDAK ADA yang di-deploy." >&2
+            echo "Isi di: GitHub repo ${{ github.repository }} > Settings > Secrets > VERCEL_TOKEN" >&2
+            echo "Lalu trigger ulang: Actions > 'Deploy portal ke Vercel' > Run workflow" >&2
+          fi
