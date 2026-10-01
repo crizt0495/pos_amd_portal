@@ -1,5 +1,7 @@
 # KasirPro — Portal Operator
 
+**Live: <https://pos-amd-portal.vercel.app>**
+
 PWA **mobile only** untuk operator toko: daftar serial key, mengelola komisi, dan profil
 toko. Deploy di **Vercel**, data di **Supabase**.
 
@@ -263,7 +265,8 @@ Runner: [`tools/test/run-all.mjs`](./tools/test/run-all.mjs). Yang dijalankan:
 
 ## 6. Cara deploy
 
-Deploy sudah **selesai dan terverifikasi live** pada `https://pos-amd-portal.vercel.app`.
+Deploy sudah **selesai dan terverifikasi live** di
+**<https://pos-amd-portal.vercel.app>** (tautan otomatis).
 Pengaturan proyek yang dipakai (ada di `vercel.json` root repo):
 
 - **Root Directory**: `portal`  (`"projectSettings": { "rootDirectory": "portal" }`)
@@ -310,7 +313,7 @@ Hasil verifikasi terhadap domain produksi (tidak pakai localhost sama sekali):
   `/icons/icon-192.png` 200 | `/sw.js` 200
 - Round-trip API penuh (login → generate → aktivasi → mismatch → profil):
   **30/30 lulus**
-- API aktivasi melawan `https://pos-amd-portal.vercel.app`: **17/17 lulus**
+- API aktivasi melawan <https://pos-amd-portal.vercel.app>: **17/17 lulus**
 
 ---
 
@@ -336,9 +339,9 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | --- | --- |
 | `portal`: `tsc --noEmit` | bersih |
 | `portal`: `next build` | sukses (12 route, service worker ke `public/sw.js`) |
-| `portal`: `check:supabase` | **hijau semua** (env, kunci, tabel, 4 RPC, bucket, toko terdaftar) |
-| `portal`: round-trip API asli vs Supabase (login GoTrue → generate key → komisi tier → aktivasi → ALREADY_ACTIVE → HWID_MISMATCH → INVALID_KEY → profil → upload logo → kuota/komisi) | **30/30 lulus** |
-| `portal`: **deploy Vercel live** — `https://pos-amd-portal.vercel.app` (login, PWA manifest/icon/sw, generate, aktivasi, HWID mismatch, profil) | **round-trip 30/30 + rute PWA 200** |
+| `portal`: `check:supabase` | **hijau semua** (env, kunci, tabel, 4 RPC, toko terdaftar) |
+| `portal`: round-trip API asli vs Supabase (login GoTrue → generate key → komisi tier → aktivasi → ALREADY_ACTIVE → HWID_MISMATCH → INVALID_KEY → profil → kuota/komisi) | **30/30 lulus** |
+| `portal`: **deploy Vercel live** — <https://pos-amd-portal.vercel.app> (login, PWA manifest/icon/sw, generate, aktivasi, HWID mismatch, profil) | **round-trip 30/30 + rute PWA 200** |
 | **Portal: Lighthouse** (login/home/aktivasi/profile, mobile) | **A11y 100 · Best Practices 100 · SEO 100** di semua halaman; Performance 98–100 (turunan Next.js runtime) |
 | **Portal: responsif semua perangkat** (375 · 768 · 1366 · 1920 px × 4 halaman) | **16/16 lulus** — tanpa overflow horizontal, kolom terkunci tengah, bottom nav selalu terlihat |
 | **GitHub Actions CI** | **passing** (typecheck portal, build, tes statis, Supabase) |
@@ -349,7 +352,7 @@ Semua di bawah ini sudah dijalankan di mesin ini dan **lulus**:
 | # | Langkah | Catatan |
 | --- | --- | --- |
 | 1 | Schema + akun demo sudah diterapkan ke Supabase oleh pengembang (via koneksi Postgres) | `check:supabase` hijau, login demo `demo / toko12345` (atau email) |
-| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di `pos-amd-portal.vercel.app` (vercel.json sudah mengatur root dir `portal`) |
+| 2 | Deploy `portal` ke Vercel | **sudah selesai & live** di <https://pos-amd-portal.vercel.app> (vercel.json sudah mengatur root dir `portal`) |
 
 ---
 
