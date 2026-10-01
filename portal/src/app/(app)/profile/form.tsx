@@ -18,7 +18,7 @@ import { Field, Input, InputTelepon, Textarea } from '@/components/ui/form';
 import { bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
-import { TIER_RULES, tierOf, tierRangeLabel } from '@/lib/commission';
+import { TIER_RULES, tierOf, tierRangeLabel, tierRangePendek } from '@/lib/commission';
 import type { TierName } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -247,7 +247,10 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           </p>
         </div>
 
-        {/* 4 mahkota: tier aktif full, lainnya warna redup tapi tetap kontras */}
+        {/* 4 card tier. Keterangan rentang lisensi DI DALAM card, bukan teks
+            panjang terpisah di bawahnya — supaya tidak dobel dengan box hitam
+            "Tier Anda" yang sudah menyebut rentang + sisa key. Tier aktif
+            diberi border hitam tebal, sisanya border tipis. */}
         <ul className="mt-3 grid grid-cols-4 gap-2">
           {TIER_RULES.map((t) => {
             const current = t.name === tier.name;
@@ -255,31 +258,39 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
               <li
                 key={t.name}
                 className={cn(
-                  'flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-3 text-center transition',
+                  'flex flex-col items-center rounded-xl p-3 text-center transition',
                   current
-                    ? 'border-zinc-900 bg-white shadow-card'
-                    : 'border-zinc-100 bg-zinc-50',
+                    ? 'border-2 border-black bg-white'
+                    : 'border border-gray-100 bg-gray-50',
                 )}
               >
                 <span
                   className={cn(
-                    'grid h-10 w-10 place-items-center rounded-full',
-                    !current && 'opacity-40',
+                    'grid h-8 w-8 place-items-center rounded-full',
+                    t.chipBg,
+                    !current && 'opacity-50',
                   )}
-                  style={{ backgroundColor: `${t.color}1a` }}
                 >
-                  <Crown className="h-5 w-5" style={{ color: t.color }} strokeWidth={2.5} />
+                  <Crown className="h-4 w-4" style={{ color: t.color }} strokeWidth={2.5} />
                 </span>
                 <span
                   className={cn(
-                    'text-[11px] font-bold leading-none',
-                    current ? 'text-zinc-800' : 'text-zinc-500',
+                    'mt-1 text-xs font-bold leading-none',
+                    current ? 'text-zinc-900' : 'text-zinc-500',
                   )}
                 >
                   {t.name}
                 </span>
-                <span className="tabular text-[10px] leading-none text-zinc-500">
+                <span
+                  className={cn(
+                    'tabular mt-1 text-[11px] font-semibold leading-none',
+                    current ? 'text-zinc-900' : 'text-zinc-600',
+                  )}
+                >
                   {t.rate * 100}%
+                </span>
+                <span className="mt-1 text-[9px] leading-tight text-gray-500">
+                  {tierRangePendek(t)}
                 </span>
               </li>
             );

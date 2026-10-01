@@ -19,6 +19,8 @@ export interface TierRule {
   max: number | null;
   rate: number;
   color: string;
+  /** Warna latar bulatan mahkota di card tier (kelas Tailwind). */
+  chipBg: string;
 }
 
 /** Nilai dasar komisi per paket SEBELUM dikali tier rate (IDR). */
@@ -49,10 +51,10 @@ export const LICENSE_TYPE_LABEL: Record<'sekali' | 'langganan', string> = {
 };
 
 export const TIER_RULES: TierRule[] = [
-  { name: 'Bronze', min: 1, max: 5, rate: 0.05, color: '#a16207' },
-  { name: 'Silver', min: 6, max: 10, rate: 0.1, color: '#64748b' },
-  { name: 'Gold', min: 11, max: 30, rate: 0.2, color: '#ca8a04' },
-  { name: 'Platinum', min: 30, max: null, rate: 0.3, color: '#0f172a' },
+  { name: 'Bronze', min: 1, max: 5, rate: 0.05, color: '#a16207', chipBg: 'bg-amber-100' },
+  { name: 'Silver', min: 6, max: 10, rate: 0.1, color: '#64748b', chipBg: 'bg-gray-100' },
+  { name: 'Gold', min: 11, max: 30, rate: 0.2, color: '#ca8a04', chipBg: 'bg-yellow-100' },
+  { name: 'Platinum', min: 30, max: null, rate: 0.3, color: '#0f172a', chipBg: 'bg-slate-200' },
 ];
 
 /** Tier toko berdasarkan total lisensi yang sudah dibuat. */
@@ -67,6 +69,14 @@ export function tierOf(totalTerjual: number): TierRule {
 /** Label rentang tier, contoh: "1 - 5 Lisensi" / "30+ Lisensi". */
 export function tierRangeLabel(tier: TierRule): string {
   return tier.max === null ? `${tier.min}+ Lisensi` : `${tier.min} - ${tier.max} Lisensi`;
+}
+
+/**
+ * Label rentang ringkas untuk card tier, contoh: "1-5 lisensi" / "30+ lisensi".
+ * Tanpa spasi Around tanda hubung supaya muat di card 4 kolom tanpa wrap.
+ */
+export function tierRangePendek(tier: TierRule): string {
+  return tier.max === null ? `${tier.min}+ lisensi` : `${tier.min}-${tier.max} lisensi`;
 }
 
 /** Nominal komisi final untuk 1 lisensi. */
