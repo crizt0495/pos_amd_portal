@@ -138,7 +138,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
             TIER_ICON_BG[tier.name],
           )}
         >
-          <Store size={48} className="text-white" aria-hidden="true" />
+          <Store size={44} className="text-white" aria-hidden="true" />
         </div>
         <p className="mt-2 text-sm text-gray-500">{namaToko.trim() || 'DEMO Toko Berkah'}</p>
       </section>
@@ -205,7 +205,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           type="submit"
           loading={saving}
           disabled={!isFormValid}
-          className="sticky bottom-[80px] z-10 h-14 w-full !bg-black"
+          className="sticky bottom-[80px] z-10 h-auto w-full !bg-black py-3.5"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Menyimpan…' : 'Simpan'}
