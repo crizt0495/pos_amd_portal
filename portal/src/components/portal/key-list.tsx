@@ -203,7 +203,9 @@ function StatusBadge({ status }: { status: string }) {
     unused: { text: 'Belum dipakai', className: 'bg-amber-50 text-amber-700' },
     active: { text: 'Aktif di kasir', className: 'bg-emerald-50 text-emerald-700' },
     blocked: { text: 'Diblokir', className: 'bg-red-50 text-red-700' },
-    revoked: { text: 'Dicabut', className: 'bg-zinc-100 text-zinc-500' },
+    // text-zinc-600, bukan text-zinc-500: di atas bg-zinc-100, zinc-500 hanya
+    // 4,40:1 dan gagal WCAG AA (butuh 4,50:1).
+    revoked: { text: 'Dicabut', className: 'bg-zinc-100 text-zinc-600' },
   };
   const s = map[status] ?? map.unused!;
   return (

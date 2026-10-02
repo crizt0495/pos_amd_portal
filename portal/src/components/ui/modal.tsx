@@ -52,7 +52,9 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Tutup"
-            className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-zinc-100 text-zinc-500"
+            // text-zinc-600, bukan text-zinc-500: di atas bg-zinc-100, zinc-500 hanya
+            // 4,40:1 dan gagal WCAG AA (butuh 4,50:1).
+            className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-zinc-100 text-zinc-600"
           >
             <X className="h-4 w-4" />
           </button>
