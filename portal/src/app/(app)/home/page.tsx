@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronRight, KeyRound, LogOut, Sparkles } from 'lucide-react';
+import { KeyRound, Sparkles } from 'lucide-react';
 
+import { ProfileMenu } from '@/components/portal/profile-menu';
 import { createClient } from '@/lib/supabase/server';
 import { getPortalUser } from '@/lib/supabase/session';
 import { PAKET_LABEL, tierOf, tierRangeLabel } from '@/lib/commission';
@@ -39,28 +40,10 @@ export default async function HomePage() {
 
   return (
     <main className="app-content">
-      {/* Header: kiri "Home", kanan nama toko -> + icon logout */}
+      {/* Header: kiri "Home", kanan menu profil (avatar -> dropdown) */}
       <header className="mb-5 flex items-center justify-between gap-2">
         <h1 className="text-[22px] font-bold leading-none">Home</h1>
-        <div className="flex items-center gap-1.5">
-          <Link
-            href="/profile"
-            className="flex max-w-[150px] items-center gap-1 rounded-full bg-zinc-100 py-1.5 pl-3 pr-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-200"
-          >
-            <span className="truncate">{namaToko}</span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-          </Link>
-          <form id="form-keluar" action="/api/auth/logout" method="post">
-            <button
-              type="submit"
-              aria-label="Keluar"
-              title="Keluar"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200 active:scale-95"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          </form>
-        </div>
+        <ProfileMenu namaToko={namaToko} email={user.email} />
       </header>
 
       {/* Kartu statistik 3 kolom */}
@@ -131,25 +114,6 @@ export default async function HomePage() {
           </ul>
         )}
       </section>
-
-      {/* Anti klik-ganda tanpa hydration: 1 klik = 1 logout, terkunci 1,5 detik. */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-(function () {
-  var form = document.getElementById('form-keluar');
-  if (!form) return;
-  form.addEventListener('submit', function (e) {
-    var btn = form.querySelector('button');
-    /* Saat terkunci, batal-kan submit supaya tidak ada request kedua yang lolos. */
-    if (!btn || btn.disabled) { if (e && e.preventDefault) e.preventDefault(); return; }
-    btn.disabled = true;
-    window.setTimeout(function () { btn.disabled = false; }, 1500);
-  });
-})();
-`,
-        }}
-      />
     </main>
   );
 }
