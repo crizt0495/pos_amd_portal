@@ -74,3 +74,25 @@ export function inisial(nama: string | null | undefined): string {
 export function bersihkanTelepon(v: string): string {
   return (v ?? '').replace(/\D/g, '').slice(0, 15);
 }
+
+/**
+ * Nomor telepon -> format international untuk `wa.me`.
+ *
+ * Nomor lokal Indonesia `08xx` jadi `628xx`; yang sudah `62` atau `8` tidak
+ * diubah. Mengembalikan string kosong bila tidak ada digit yang bisa dipakai,
+ * supaya pemanggil bisa menyembunyikan tombol WhatsApp alih-alih membuka
+ * tautan yang salah.
+ */
+export function nomorWa(v: string | null | undefined): string {
+  const angka = bersihkanTelepon(v ?? '');
+  if (!angka) return '';
+  if (angka.startsWith('62')) return angka;
+  if (angka.startsWith('0')) return `62${angka.slice(1)}`;
+  if (angka.startsWith('8')) return `62${angka}`;
+  return `62${angka}`;
+}
+
+/** Tautan `wa.me` dengan pesan yang sudah ter-encode. */
+export function tautanWa(nomor: string, pesan: string): string {
+  return `https://wa.me/${nomor}?text=${encodeURIComponent(pesan)}`;
+}
