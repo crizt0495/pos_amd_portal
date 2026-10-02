@@ -17,12 +17,12 @@ export default async function HomePage() {
   const user = await getPortalUser();
   if (!user) redirect('/login');
 
-  // Satu panggilan database: partner + lisensi terbarunya (embedded PostgREST).
+  // Panggilan 1: partner + 20 lisensi terbaru (embedded PostgREST, satu kali jalan).
   const supabase = createClient();
   const { data: partnerRow } = await supabase
     .from('partners')
     .select(
-      'id, nama_toko, total_terjual, license_quota, licenses(order: created_at.desc, limit: 20, created_at, paket_type, pembeli_nama, pembeli_hp, alamat, komisi_amount, status, serial_key)',
+      'id, nama_toko, total_terjual, license_quota, komisi_total, licenses(order: created_at.desc, limit: 20, created_at, paket_type, pembeli_nama, pembeli_hp, alamat, komisi_amount, status, serial_key)',
     )
     .eq('user_id', user.id)
     .maybeSingle();
@@ -33,10 +33,27 @@ export default async function HomePage() {
   const namaToko = partner?.nama_toko ?? 'Toko Saya';
   const sisa = partner?.license_quota ?? 0;
   const total = sisa + (partner?.total_terjual ?? 0); // kuota awal = sisa + yang sudah terjual
-  const bundleCount = licenses.filter((l) => l.paket_type === 'bundle').length;
-  const appCount = licenses.filter((l) => l.paket_type === 'app_only').length;
-  const totalKomisi = licenses.reduce((sum, l) => sum + Number(l.komisi_amount ?? 0), 0);
   const tier = tierOf(partner?.total_terjual ?? 0);
+
+  // Panggilan 2 dan 3: jumlah key per tipe paket.
+  //
+  // Dulu angka Bundle dan Aplikasi dijumlahkan dari 20 lisensi yang terambil,
+  // jadi kartu itu sebenarnya menampilkan "20 terbaru", bukan seluruh key toko
+  // — salah begitu toko sudah lewat 20 key. `head: true` membuat PostgREST hanya
+  // menghitung tanpa mengirim baris, jadi murah dan tidak menambah payload.
+  const [bundle, aplikasi] = await Promise.all([
+    supabase.from('licenses').select('id', { count: 'exact', head: true }).eq('paket_type', 'bundle'),
+    supabase
+      .from('licenses')
+      .select('id', { count: 'exact', head: true })
+      .eq('paket_type', 'app_only'),
+  ]);
+  const bundleCount = bundle.count ?? 0;
+  const appCount = aplikasi.count ?? 0;
+
+  // Total komisi dari kolom terdenormalisasi di `partners`, bukan dijumlahkan
+  // dari 20 lisensi — penjumlahan itu hanya menghitung 20 key terbaru.
+  const totalKomisi = partner?.komisi_total ?? 0;
 
   return (
     <main className="app-content">
