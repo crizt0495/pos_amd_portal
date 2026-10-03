@@ -11,6 +11,16 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Atribut `hidden` harus BENAR-BENAR menyembunyikan elemen.
+     Tanpa aturan ini, kelas utility Tailwind (mis. `flex`) mengalahkan
+     `display:none` bawaan browser — specificity-nya sama, dan utility ada
+     setelah base — sehingga elemen ber-`hidden` tetap kelihatan.
+     Pakai `!important` supaya menang dari utility apa pun.
+     (Dipakai halaman /login untuk kotak pesan error.) */
+  [hidden] {
+    display: none !important;
+  }
+
   body {
     @apply bg-white text-foreground antialiased;
     font-feature-settings: 'cv11', 'ss01';
