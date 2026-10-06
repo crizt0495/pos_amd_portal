@@ -119,6 +119,55 @@ if (run('statis') || run('all') || run('portal')) {
   if (offenders.length === 0) ok('tidak ada karakter asing (CJK) di file sumber');
   else fail(`${offenders.length} baris punya karakter asing`, offenders.slice(0, 10).join('\n'));
 
+  // Larangan: modifier `order:` / `limit:` di DALAM kurung select() untuk
+  // tabel yang di-embed.
+  //
+  // PostgREST membaca isi kurung select() sebagai DAFTAR KOLOM, jadi
+  // `licenses(order: created_at.desc, limit: 20, ...)` berarti ia mencari kolom
+  // bernama "order: created_at.desc" -> query gagal 42703 -> `data` selalu
+  // null. Akibatnya angka kuota jadi 0 dan daftar key kosong, padahal datanya
+  // ada. (order/limit untuk tabel ter-embed hanya bisa lewat query parameter
+  // `&licenses.order=...`, yang tidak bisa ditulis di postgrest-js.)
+  const BAD_EMBED = /\b(?:order|limit)\s*:/;
+  const embedOffenders = [];
+  const scanSelect = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name.startsWith('.') || e.name === 'dist') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) scanSelect(p);
+      else if (/\.(ts|tsx)$/.test(e.name)) {
+        const txt = fs.readFileSync(p, 'utf8');
+        let from = 0;
+        for (;;) {
+          const at = txt.indexOf('.select(', from);
+          if (at === -1) break;
+          // ambil isi kurung select() secara berpasangan
+          let depth = 0;
+          let k = at + '.select'.length;
+          for (; k < txt.length; k += 1) {
+            if (txt[k] === '(') depth += 1;
+            else if (txt[k] === ')') {
+              depth -= 1;
+              if (depth === 0) break;
+            }
+          }
+          if (BAD_EMBED.test(txt.slice(at, k + 1))) {
+            embedOffenders.push(`${path.relative(ROOT, p)}:${txt.slice(0, at).split('\n').length}`);
+          }
+          from = at + 1;
+        }
+      }
+    }
+  };
+  scanSelect(path.join(PORTAL, 'src'));
+  if (embedOffenders.length === 0)
+    ok('tidak ada modifier order/limit di dalam kurung select()');
+  else
+    fail(
+      `${embedOffenders.length} select() memuat "order:"/"limit:" di dalam kurung (query akan gagal)`,
+      embedOffenders.slice(0, 10).join('\n'),
+    );
+
   // tidak boleh ada kunci asli yang bocor ke file yang di-commit.
   // Pola dirakit dari potongan supaya berkas ini sendiri tidak cocok.
   const LEAK = new RegExp(['sb', 'secret_', '[A-Za-z0-9]{20,}'].join(''));

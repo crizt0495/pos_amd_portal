@@ -3,11 +3,10 @@ import { Sparkles } from 'lucide-react';
 
 import { KeyList } from '@/components/portal/key-list';
 import { ProfileMenu } from '@/components/portal/profile-menu';
-import { createClient } from '@/lib/supabase/server';
-import { getPortalUser } from '@/lib/supabase/session';
-import { tierOf, tierRangeLabel } from '@/lib/commission';
+import { tierRangeLabel } from '@/lib/commission';
 import { rupiah } from '@/lib/format';
-import type { License, Partner } from '@/types';
+import { getPortalUser } from '@/lib/supabase/session';
+import { getTokoStats } from '@/lib/supabase/toko-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,43 +16,11 @@ export default async function HomePage() {
   const user = await getPortalUser();
   if (!user) redirect('/login');
 
-  // Panggilan 1: partner + 20 lisensi terbaru (embedded PostgREST, satu kali jalan).
-  const supabase = createClient();
-  const { data: partnerRow } = await supabase
-    .from('partners')
-    .select(
-      'id, nama_toko, total_terjual, license_quota, komisi_total, licenses(order: created_at.desc, limit: 20, created_at, paket_type, pembeli_nama, pembeli_hp, alamat, komisi_amount, status, serial_key)',
-    )
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const partner = (partnerRow ?? null) as (Partner & { licenses?: License[] }) | null;
-  const licenses = (partner?.licenses ?? []) as License[];
+  // Satu sumber angka untuk Home & Profile (sisa kuota, total terjual, komisi).
+  const { partner, sisa, terjual, kuotaAwal, komisiTotal, tier, licenses, bundleCount, appCount } =
+    await getTokoStats(user.id);
 
   const namaToko = partner?.nama_toko ?? 'Toko Saya';
-  const sisa = partner?.license_quota ?? 0;
-  const total = sisa + (partner?.total_terjual ?? 0); // kuota awal = sisa + yang sudah terjual
-  const tier = tierOf(partner?.total_terjual ?? 0);
-
-  // Panggilan 2 dan 3: jumlah key per tipe paket.
-  //
-  // Dulu angka Bundle dan Aplikasi dijumlahkan dari 20 lisensi yang terambil,
-  // jadi kartu itu sebenarnya menampilkan "20 terbaru", bukan seluruh key toko
-  // — salah begitu toko sudah lewat 20 key. `head: true` membuat PostgREST hanya
-  // menghitung tanpa mengirim baris, jadi murah dan tidak menambah payload.
-  const [bundle, aplikasi] = await Promise.all([
-    supabase.from('licenses').select('id', { count: 'exact', head: true }).eq('paket_type', 'bundle'),
-    supabase
-      .from('licenses')
-      .select('id', { count: 'exact', head: true })
-      .eq('paket_type', 'app_only'),
-  ]);
-  const bundleCount = bundle.count ?? 0;
-  const appCount = aplikasi.count ?? 0;
-
-  // Total komisi dari kolom terdenormalisasi di `partners`, bukan dijumlahkan
-  // dari 20 lisensi — penjumlahan itu hanya menghitung 20 key terbaru.
-  const totalKomisi = partner?.komisi_total ?? 0;
 
   return (
     <main className="app-content">
@@ -65,7 +32,11 @@ export default async function HomePage() {
 
       {/* Kartu statistik 3 kolom */}
       <section className="grid grid-cols-3 gap-2.5">
-        <StatCard value={`${sisa}/${total}`} label="Sisa" />
+        <StatCard
+          value={`${sisa}/${terjual}`}
+          label="Sisa / Terjual"
+          sub={`dari ${kuotaAwal} kuota`}
+        />
         <StatCard value={String(bundleCount)} label="Bundle" />
         <StatCard value={String(appCount)} label="Aplikasi" />
       </section>
@@ -74,7 +45,7 @@ export default async function HomePage() {
       <section className="mt-3 rounded-2xl bg-zinc-900 p-4 text-white shadow-card">
         <p className="text-[12px] font-medium text-zinc-400">Total Komisi</p>
         <p className="tabular mt-1 text-[28px] font-bold leading-tight">
-          {rupiah(totalKomisi)}
+          {rupiah(komisiTotal)}
         </p>
         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5 text-[11px] text-zinc-400">
           <span className="inline-flex items-center gap-1">
@@ -97,14 +68,19 @@ export default async function HomePage() {
   );
 }
 
-function StatCard({ value, label }: { value: string; label: string }) {
+/**
+ * Kartu angka. `value` boleh berisi pembatas (mis. "5/8"), `sub` baris kecil
+ * di bawah label — dipakai kartu Sisa/Terjual untuk menyebut kuota awal, jadi
+ * jelas mana sisa, mana yang sudah terjual.
+ */
+function StatCard({ value, label, sub }: { value: string; label: string; sub?: string }) {
   return (
     <div className="card-soft px-2 py-4 text-center">
       <span className="tabular block text-[24px] font-bold leading-none text-zinc-900">{value}</span>
       <span className="mt-2 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
         {label}
       </span>
+      {sub ? <span className="mt-0.5 block text-[10px] text-zinc-400">{sub}</span> : null}
     </div>
   );
 }
-

@@ -2,9 +2,8 @@ import { redirect } from 'next/navigation';
 
 import ProfileForm from './form';
 
-import { createClient } from '@/lib/supabase/server';
 import { getPortalUser } from '@/lib/supabase/session';
-import type { Partner } from '@/types';
+import { getTokoStats } from '@/lib/supabase/toko-stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +13,10 @@ export default async function ProfilePage() {
   const user = await getPortalUser();
   if (!user) redirect('/login');
 
-  const supabase = createClient();
-  const { data: partnerRow } = await supabase
-    .from('partners')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  const partner = (partnerRow ?? null) as Partner | null;
+  // Angka "Total terjual" & "Sisa kuota" di bawah berasal dari fungsi yang
+  // sama dengan Home, jadi keduanya tidak mungkin berbeda. Parameter `false`
+  // karena halaman ini tidak butuh daftar key — hemat 3 panggilan database.
+  const { partner, terjual, sisa } = await getTokoStats(user.id, false);
 
   return (
     <ProfileForm
@@ -30,8 +26,8 @@ export default async function ProfilePage() {
         alamat: partner?.alamat ?? '',
       }}
       email={user.email}
-      totalTerjual={partner?.total_terjual ?? 0}
-      quota={partner?.license_quota ?? 0}
+      totalTerjual={terjual}
+      quota={sisa}
     />
   );
 }
