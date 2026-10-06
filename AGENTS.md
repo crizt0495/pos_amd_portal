@@ -61,13 +61,30 @@ di repo. Untuk kasus seperti itu:
 - `portal/` — aplikasi Next.js, PWA portal operator.
 - `tools/test/run-all.mjs` — uji statis + uji portal. Jalankan `npm test`
   dari root repo.
-- Hanya ada tiga tabel: `partners` (baris toko), `licenses` (serial key),
-  dan `auth.users`. **Tidak ada tabel `toko` maupun `keys`.**
-- Angka kuota toko: `partners.license_quota` = sisa (dikurangi setiap key
-  dibuat oleh RPC `generate_license`) dan `partners.total_terjual` = yang sudah
-  terjual. Keduanya **tidak boleh dihitung ulang** dari jumlah baris
-  `licenses`. Baca keduanya lewat `getTokoStats()` di
-  `portal/src/lib/supabase/toko-stats.ts`.
+- Tabel: `partners` (baris toko), `licenses` (serial key), `auth.users`,
+  plus `produk` (katalog harga), `langganan_pembayaran` (catatan bulan
+  langganan yang sudah dibayar), dan view `toko_rekap`.
+  **Tidak ada tabel `toko` maupun `keys`.**
+- Semua angka rekap toko (sisa, terjual, bundle/app, komisi penjualan,
+  komisi langganan, total komisi) dihitung di dalam view `toko_rekap` dan
+  dibaca lewat `getTokoStats()` di
+  `portal/src/lib/supabase/toko-stats.ts`. Home dan Profile memakai fungsi
+  yang sama, jadi angkanya tidak mungkin berbeda.
+  - `sisa` = `partners.license_quota` (dikurangi setiap key dibuat).
+  - `terjual` = **jumlah baris `licenses`** (COUNT), bukan
+    `partners.total_terjual`. Counter itu bisa menyimpang dari data asli
+    kalau ada insert/delete di luar RPC; bagian 10.1 di `schema.sql`
+    memperbaikinya. Jangan menuliskan angka ini sebagai hitungan ulang di
+    kode JS — biar tetap satu sumber.
+  - `getTokoStats()` punya jalur cadangan kalau view `toko_rekap` belum ada
+    (deploy sebelum SQL dijalankan), ditandai `modeCadangan: true`.
+- `licenses.tier_rate` adalah **snapshot** persen tier saat transaksi dibuat.
+  Jangan pernah menghitung ulang komisi dari tier terkini.
+- `langganan_pembayaran` mulai dari `bulan_ke >= 2`; bulan pertama sudah
+  termasuk di `licenses.komisi_amount`. Kalau bulan 1 ikut masuk lagi, komisi
+  langganan terhitung dobel.
+- Endpoint `/api/langganan` (POST) memanggil RPC
+  `catat_langganan_bulan`; UI-nya `components/portal/langganan-list.tsx`.
 
 ## Jebakan PostgREST yang pernah menimpa repo ini
 

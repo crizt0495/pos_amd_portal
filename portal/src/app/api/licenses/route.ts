@@ -127,6 +127,9 @@ export async function POST(req: Request) {
       quota: (after?.license_quota as number) ?? 0,
       tier: row.tier,
       komisi: Number(row.komisi_amount ?? 0),
+      // Harga acuan yang dipakai menghitung komisi ini, supaya modal berhasil
+      // bisa menampilkan "Harga" + "Komisi" tanpa menebak.
+      harga: row.harga_jual == null ? null : Number(row.harga_jual),
     });
   }
 

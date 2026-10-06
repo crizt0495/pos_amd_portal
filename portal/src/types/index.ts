@@ -59,6 +59,53 @@ export interface License {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Katalog produk yang dipakai sebagai acuan harga. */
+  produk_id: string | null;
+  /**
+   * Harga acuan saat transaksi, disimpan sebagai snapshot.
+   * NULL = lisensi dibuat sebelum harga dicatat di database.
+   */
+  harga_jual: number | null;
+}
+
+/**
+ * Baris view `toko_rekap` (lihat supabase/schema.sql bagian 10).
+ *
+ * Semua angka toko dihitung di database, jadi Home dan Profile membaca angka
+ * yang sama dan tidak bisa berbeda karena salah satu query gagal.
+ * - `sisa`          = partners.license_quota
+ * - `total_key`     = JUMLAH baris licenses (bukan counter total_terjual)
+ * - `total_komisi`  = komisi_penjualan + komisi_langganan (akumulasi)
+ * - `langganan_per_key` = { "<license_id>": bulan_terakhir } untuk badge
+ */
+export interface RekapToko {
+  partner_id: string;
+  user_id: string | null;
+  email: string | null;
+  nama_toko: string;
+  no_hp: string | null;
+  alamat: string | null;
+  status: 'active' | 'suspended';
+  sisa: number;
+  total_terjual_counter: number;
+  komisi_total_counter: number;
+  total_key: number;
+  bundle_count: number;
+  app_count: number;
+  komisi_penjualan: number;
+  komisi_langganan: number;
+  total_komisi: number;
+  langganan_per_key: Record<string, number>;
+}
+
+/** Satu catatan pembayaran langganan per bulan. */
+export interface CatatanLangganan {
+  id: string;
+  license_id: string;
+  partner_id: string;
+  bulan_ke: number;
+  dibayar_pada: string;
+  komisi_toko: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -124,5 +171,24 @@ export interface GenerateLicenseResponse {
   license?: License;
   quota?: number;
   tier?: TierName;
+  komisi?: number;
+  /** Harga acuan yang dipakai menghitung komisi key ini. */
+  harga?: number | null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Langganan bulanan (komisi per bulan)                                */
+/* ------------------------------------------------------------------ */
+
+export interface CatatLanggananRequest {
+  license_id: string;
+}
+
+export interface CatatLanggananResponse {
+  ok: boolean;
+  message: string;
+  /** Nomor bulan yang baru dicatat (2 = bulan kedua). */
+  bulan_ke?: number;
+  /** Nominal komisi yang ditambahkan ke total. */
   komisi?: number;
 }

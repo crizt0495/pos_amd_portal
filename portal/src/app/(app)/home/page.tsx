@@ -17,8 +17,20 @@ export default async function HomePage() {
   if (!user) redirect('/login');
 
   // Satu sumber angka untuk Home & Profile (sisa kuota, total terjual, komisi).
-  const { partner, sisa, terjual, kuotaAwal, komisiTotal, tier, licenses, bundleCount, appCount } =
-    await getTokoStats(user.id);
+  const {
+    partner,
+    sisa,
+    terjual,
+    kuotaAwal,
+    komisiTotal,
+    komisiPenjualan,
+    komisiLangganan,
+    tier,
+    licenses,
+    bundleCount,
+    appCount,
+    langgananPerKey,
+  } = await getTokoStats(user.id);
 
   const namaToko = partner?.nama_toko ?? 'Toko Saya';
 
@@ -47,6 +59,15 @@ export default async function HomePage() {
         <p className="tabular mt-1 text-[28px] font-bold leading-tight">
           {rupiah(komisiTotal)}
         </p>
+
+        {/* Rincian hanya tampil kalau memang ada komisi langganan, supaya
+            kartu tidak menambah baris kosong untuk toko tanpa langganan. */}
+        {komisiLangganan > 0 ? (
+          <p className="tabular mt-1 text-[11px] text-zinc-400">
+            Penjualan {rupiah(komisiPenjualan)} · Langganan {rupiah(komisiLangganan)}
+          </p>
+        ) : null}
+
         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5 text-[11px] text-zinc-400">
           <span className="inline-flex items-center gap-1">
             <Sparkles className="h-3 w-3" /> Tier {tier.name} · komisi {tier.rate * 100}%
@@ -62,7 +83,11 @@ export default async function HomePage() {
           <span className="text-[11px] text-zinc-500">{licenses.length} transaksi terakhir</span>
         </div>
 
-        <KeyList licenses={licenses} namaToko={namaToko} />
+        <KeyList
+          licenses={licenses}
+          namaToko={namaToko}
+          langgananPerKey={langgananPerKey}
+        />
       </section>
     </main>
   );

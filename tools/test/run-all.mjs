@@ -210,10 +210,55 @@ if (run('portal') || run('all')) {
   assert('next build sukses', build.ok, build.out);
   hasFile('service worker PWA ter-generate', 'portal/public/sw.js');
 
-  for (const r2 of ['/api/activate', '/api/licenses', '/api/profile']) {
+  // Route handler yang wajib ada. `/api/langganan` menulis lewat RPC
+  // `catat_langganan_bulan` (schema.sql bagian 9.1) untuk mencatat komisi
+  // langganan per bulan.
+  for (const r2 of ['/api/activate', '/api/licenses', '/api/langganan', '/api/profile']) {
     const routeFile = path.join(PORTAL, 'src', 'app', r2, 'route.ts');
     assert(`route ${r2} ada`, fs.existsSync(routeFile), routeFile);
   }
+
+  // Objek database yang dipakai kode didefinisikan di supabase/schema.sql,
+  // yang dijalankan manual di Supabase SQL Editor. Kalau nama di kode dan di
+  // SQL berbeda, seluruh angka jadi null/0 di produksi -- persis kelas bug
+  // yang dulu membuat kartu Home 0/0. Karena file SQL tidak ikut ter-deploy,
+  // satu sisi yang di-rename harus mengubah sisi yang lain juga; cek ini
+  // yangytu menutup celah itu.
+  const schemaSql = fs.readFileSync(path.join(PORTAL, 'supabase', 'schema.sql'), 'utf8');
+  const srcFiles = [];
+  const collectSrc = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name.startsWith('.') || e.name === 'dist') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) collectSrc(p);
+      else if (/\.(ts|tsx)$/.test(e.name)) srcFiles.push([p, fs.readFileSync(p, 'utf8')]);
+    }
+  };
+  collectSrc(path.join(PORTAL, 'src'));
+
+  const OBJEK_DB = [
+    ['view toko_rekap', 'toko_rekap'],
+    ['tabel langganan_pembayaran', 'langganan_pembayaran'],
+    ['kolom licenses.harga_jual', 'harga_jual'],
+    ['kolom licenses.produk_id', 'produk_id'],
+    ['RPC catat_langganan_bulan', 'catat_langganan_bulan'],
+    ['RPC generate_license', 'generate_license'],
+  ];
+  // Satu arah saja: yang dipakai src/ WAJIB ada di schema.sql. Arah sebaliknya
+  // tidak dicek karena schema.sql memang punya objek yang tidak dipanggil dari
+  // kode portal (helper SQL, RPC untuk aplikasi desktop, fungsi tier yang
+  // dipanggil di dalam SQL lain).
+  const dbOffenders = [];
+  for (const [label, nama] of OBJEK_DB) {
+    const diKode = srcFiles.some(([, t]) => t.includes(nama));
+    const diSql = schemaSql.includes(nama);
+    if (diKode && !diSql) {
+      dbOffenders.push(`${label}: dipakai di src/ tapi tidak ada di schema.sql`);
+    }
+  }
+  if (dbOffenders.length === 0)
+    ok('nama objek database di src/ sama dengan yang didefinisikan di schema.sql');
+  else fail(`${dbOffenders.length} ketidakcocokan nama objek database`, dbOffenders.join('\n'));
 
   const envE = fs.existsSync(path.join(PORTAL, '.env.local'));
   if (envE) {

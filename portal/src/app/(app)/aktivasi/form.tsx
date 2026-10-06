@@ -142,8 +142,11 @@ export default function AktivasiForm({ quota }: Props) {
     setResult(null);
   }
 
+  // `<main className="app-content">` dimiliki page.tsx supaya section komisi
+  // langganan di bawahnya ikut berada di dalam container yang sama (padding
+  // dan jarak terhadap BottomNav).
   return (
-    <main className="app-content">
+    <>
       <header className="mb-5">
         <h1 className="text-[22px] font-bold leading-none">Generate Serial Key</h1>
         <p className="mt-2 text-[13px] text-zinc-500">
@@ -262,8 +265,22 @@ export default function AktivasiForm({ quota }: Props) {
               <Row label="Pembeli" value={result.pembeli_nama} />
               <Row label="Paket" value={PAKET_LABEL[result.paket_type]} />
               <Row label="Jenis" value={LICENSE_TYPE_LABEL[result.license_type]} />
+              {/* Harga acuan dari database. NULL untuk key lama yang dibuat
+                  sebelum harga dicatat -> barisnya disembunyikan, bukan
+                  menampilkan "Rp 0" yang menyesatkan. */}
+              {result.harga_jual ? <Row label="Harga" value={rupiah(result.harga_jual)} /> : null}
               <Row label="Komisi" value={rupiah(result.komisi_amount)} />
             </dl>
+
+            {/* Untuk langganan, komisi di atas hanya bulan 1 (1/12 harga
+                tahunan). Sisa bulan dicatat di section "Komisi Langganan"
+                di bawah halaman ini. */}
+            {result.license_type === 'langganan' ? (
+              <p className="mt-2 text-[12px] leading-relaxed text-zinc-500">
+                Untuk langganan, komisi di atas adalah bulan 1. Catat bulan berikutnya di section
+                Komisi Langganan setelah pelanggan membayar.
+              </p>
+            ) : null}
 
             <Button
               type="button"
@@ -286,7 +303,7 @@ export default function AktivasiForm({ quota }: Props) {
           </div>
         ) : null}
       </Modal>
-    </main>
+    </>
   );
 }
 

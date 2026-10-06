@@ -3,7 +3,10 @@
 --  Jalankan seluruh file ini di: Supabase Dashboard > SQL Editor > New Query
 --  Aman dijalankan berulang (idempotent).
 --
---  Hanya 2 tabel bisnis: partners (toko operator) & licenses (serial key).
+--  Hanya 3 tabel bisnis: partners (toko operator), licenses (serial key),
+--  dan langganan_pembayaran (catatan komisi langganan per bulan). Tabel
+--  `produk` (katalog harga) didefinisikan di file admin portal, blok di sini
+--  cuma jaring pengaman supaya file ini bisa berdiri sendiri.
 --  Aplikasi Desktop (Komputer Kasir) TIDAK menyentuh database ini langsung —
 --  hanya lewat  POST /api/activate.
 -- ===========================================================================
@@ -230,19 +233,125 @@ returns integer language sql immutable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6. RPC generate_license  (dipakai Route Handler POST /api/licenses)
+-- 6. Katalog produk & harga acuan komisi
+--
+--    Komisi toko dulu dihitung dari nominal TETAP base_commission_of()
+--    (100rb bundle / 50rb aplikasi), bukan dari harga yang benar-benar
+--    dibayar pembeli. Akibatnya komisi tidak nyambung dengan harga: jual
+--    500rb dan jual 3,5jt dapat komisi sama besarnya.
+--
+--    Sekarang komisi = harga acuan produk x persen tier. Harga acuan diambil
+--    dari tabel `produk` yang dikelola admin portal:
+--      license_type = 'sekali'   -> produk.harga_sekali_bayar
+--      license_type = 'langganan' -> produk.harga_langganan_tahunan (per tahun)
+--
+--    CATATAN: definisi tabel `produk` yang otoritatif ada di admin portal
+--    (pos_amd_admin_portal/supabase/admin-schema.sql). Blok di bawah hanya
+--    jaring pengaman supaya file schema portal bisa berdiri sendiri; karena
+--    `create table if not exists` tidak mengubah tabel yang sudah ada, meng
+--    jalankan kedua file dalam urutan mana pun aman.
+-- ---------------------------------------------------------------------------
+create table if not exists public.produk (
+  id                       uuid primary key default gen_random_uuid(),
+  nama_apariksi            text    not null check (length(btrim(nama_apariksi)) > 0),
+  harga_sekali_bayar       integer check (harga_sekali_bayar is null or harga_sekali_bayar >= 0),
+  harga_langganan_tahunan  integer check (harga_langganan_tahunan is null or harga_langganan_tahunan >= 0),
+  deskripsi                text,
+  created_at               timestamptz not null default now()
+);
+
+-- Harga acuan disimpan di baris lisensi sebagai SNAPSHOT. Tier punya snapshot
+-- sendiri (`licenses.tier_rate`), jadi naik tier di kemudian hari tidak mengubah
+-- komisi transaksi lama. `harga_jual` hanya diisi untuk lisensi yang dibuat
+-- setelah migration ini; baris lama boleh NULL (artinya "belum punya acuan").
+alter table public.licenses
+  add column if not exists produk_id uuid references public.produk(id) on delete set null;
+
+alter table public.licenses
+  add column if not exists harga_jual integer
+  check (harga_jual is null or harga_jual >= 0);
+
+create index if not exists idx_licenses_produk on public.licenses (produk_id);
+
+-- Produk contoh HANYA kalau katalog masih kosong, supaya harga yang sudah
+-- disetel admin tidak tertimpa.
+do $$
+begin
+  if not exists (select 1 from public.produk) then
+    insert into public.produk (nama_apariksi, harga_sekali_bayar, harga_langganan_tahunan, deskripsi)
+    values ('POS AMD', 500000, 250000, 'Lisensi aplikasi kasir POS AMD');
+  end if;
+end $$;
+
+-- Tautkan lisensi lama (produk_id NULL) ke produk terbaru.
+update public.licenses l
+   set produk_id = pr.id
+  from (select id from public.produk order by created_at desc, id desc limit 1) pr
+ where l.produk_id is null;
+
+-- Isi harga_jual dari produk. SENGAJA tidak menyentuh komisi_amount: komisi
+-- yang sudah tercatat adalah snapshot saat transaksi dan tidak boleh dihitung
+-- ulang memakai harga/tier yang sekarang.
+update public.licenses l
+   set harga_jual = case when l.license_type = 'langganan'
+                         then pr.harga_langganan_tahunan
+                         else pr.harga_sekali_bayar end
+  from public.produk pr
+ where pr.id = l.produk_id
+   and l.harga_jual is null;
+
+-- ---------------------------------------------------------------------------
+-- 6.1 Helper: produk acuan + harganya untuk satu jenis lisensi
+--
+--     Kalau `p_produk_id` NULL, pakai produk terbaru (katalog yang diisi admin).
+--     Harga NULL / 0 dikembalikan apa adanya supaya pemanggil bisa membedakan
+--     "produk tidak terdaftar" dari "produk gratis".
+-- ---------------------------------------------------------------------------
+drop function if exists public.resolve_produk_harga(uuid, text);
+create or replace function public.resolve_produk_harga(p_produk_id uuid, p_license_type text)
+returns table (produk uuid, harga integer)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    pr.id,
+    coalesce(
+      case when p_license_type = 'langganan'
+           then pr.harga_langganan_tahunan
+           else pr.harga_sekali_bayar
+      end,
+      0
+    )::integer
+  from public.produk pr
+  where pr.id = p_produk_id
+     or p_produk_id is null
+  order by (pr.id = p_produk_id) desc nulls last, pr.created_at desc, pr.id desc
+  limit 1;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7. RPC generate_license  (dipakai Route Handler POST /api/licenses)
 --    - user WAJIB login (auth.uid() != null, partner_id harus miliknya)
 --    - mengunci baris partner (FOR UPDATE) supaya kuota tidak dobel terpakai
---    - membuat serial key, menghitung komisi sesuai tier SEBELUM generate,
---      menambah total_terjual, mengurangi license_quota
+--    - membuat serial key, menghitung komisi = harga acuan x persen tier
+--      SEBELUM generate, menambah total_terjual, mengurangi license_quota
+--    - langganan: komisi bulan pertama dibayar saat key dibuat, jadi toko
+--      tinggal mencatat bulan 2 dan seterusnya
+--
+--    PENTING: versi 6 argumen (tanpa p_produk_id) dibuang lebih dulu supaya
+--    PostgREST tidak melihat dua fungsi bernama sama dan jadi ambigu.
 -- ---------------------------------------------------------------------------
+drop function if exists public.generate_license(text, text, text, text, text, text);
 create or replace function public.generate_license(
   p_serial_key     text,
   p_pembeli_nama   text,
   p_pembeli_hp     text default null,
   p_alamat         text   default null,
   p_paket_type     text   default 'app_only',
-  p_license_type   text   default 'sekali'
+  p_license_type   text   default 'sekali',
+  p_produk_id      uuid   default null
 )
 returns public.licenses
 language plpgsql
@@ -256,6 +365,8 @@ declare
   v_rate      numeric;
   v_tier      text;
   v_komisi    integer;
+  v_produk_id uuid;
+  v_harga     integer;
   v_license   public.licenses;
 begin
   v_partner_id := public.current_partner_id();
@@ -283,16 +394,39 @@ begin
   -- tier dihitung dari total SEBELUM key ini dibuat
   v_rate   := public.tier_rate_of(v_total);
   v_tier   := public.tier_name_of(v_total);
-  v_komisi := round(public.base_commission_of(p_paket_type) * v_rate / 100)::integer;
+
+  -- harga acuan dari katalog produk. Kalau produk belum terdaftar atau
+  -- harganya belum diisi, jatuh ke nominal lama base_commission_of() supaya
+  -- komisi tidak mendadak jadi Rp 0.
+  select rp.produk, rp.harga
+    into v_produk_id, v_harga
+  from public.resolve_produk_harga(p_produk_id, p_license_type) rp;
+
+  if coalesce(v_harga, 0) <= 0 then
+    v_harga := public.base_commission_of(p_paket_type);
+  end if;
+
+  -- komisi = harga acuan x persen tier SAAT INI, disimpan sebagai snapshot di
+  -- licenses.komisi_amount. Transaksi lama tidak ikut berubah saat tier naik.
+  v_komisi := round(v_harga * v_rate / 100)::integer;
+
+  -- Langganan: harga di katalog adalah biaya per TAHUN, komisi dibayar per
+  -- bulan. Yang dibayar saat pendaftaran adalah bulan 1 = 1/12 harga tahunan,
+  -- dan NILAINYA disimpan di licenses.komisi_amount. Baris bulan 1 TIDAK
+  -- diduplikasi ke langganan_pembayaran, kalau tidak komisi bulan 1 akan
+  -- terhitung dua kali saat Home menjumlahkan penjualan + langganan.
+  if p_license_type = 'langganan' then
+    v_komisi := round((v_harga / 12.0) * v_rate / 100)::integer;
+  end if;
 
   insert into public.licenses (
     serial_key, partner_id, paket_type, license_type,
-    pembeli_nama, pembeli_hp, alamat,
+    pembeli_nama, pembeli_hp, alamat, produk_id, harga_jual,
     komisi_amount, tier, tier_rate, status, expires_at
   )
   values (
     p_serial_key, v_partner_id, p_paket_type, p_license_type,
-    p_pembeli_nama, p_pembeli_hp, p_alamat,
+    p_pembeli_nama, p_pembeli_hp, p_alamat, v_produk_id, v_harga,
     v_komisi, v_tier, v_rate, 'unused',
     case when p_license_type = 'langganan' then now() + interval '12 months' else null end
   )
@@ -309,7 +443,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 7. RPC activate_license  (dipakai Route Handler POST /api/activate,
+-- 8. RPC activate_license  (dipakai Route Handler POST /api/activate,
 --    ditembak oleh aplikasi desktop "Komputer Kasir")
 --
 --    status unused             -> kunci HWID, jadi active  (ACTIVATED)
@@ -438,7 +572,203 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 8. Row Level Security
+-- 9. KOMISI LANGGANAN BULANAN
+--
+--    Untuk lisensi 'langganan' (12 bulan) komisi dibayar berkala: 1/12 harga
+--    tahunan x persen tier, tiap bulan pelanggan perpanjang. Baris di tabel ini
+--    adalah bukti pencatatan per bulan, jadi komisi bisa diaudit.
+--
+--    Tabel ini sengaja tidak punya kolom tanggal jatuh tempo: pencatatan
+--    dilakukan toko setelah pelanggan benar-benar membayar (tombol di halaman
+--    Aktivasi). Kalau pembayaran bulan itu telat, komisinya tetap masuk saat
+--    dicatat -- tidak ada komisi bulan yang hilang diam-diam.
+-- ---------------------------------------------------------------------------
+create table if not exists public.langganan_pembayaran (
+  id             uuid primary key default gen_random_uuid(),
+  license_id     uuid        not null references public.licenses(id) on delete cascade,
+  partner_id     uuid        not null references public.partners(id) on delete cascade,
+  bulan_ke       integer     not null check (bulan_ke >= 1 and bulan_ke <= 12),
+  dibayar_pada   timestamptz not null default now(),
+  komisi_toko    integer     not null default 0 check (komisi_toko >= 0),
+  created_at     timestamptz not null default now(),
+  -- satu lisensi hanya boleh punya satu baris untuk bulan yang sama
+  unique (license_id, bulan_ke)
+);
+
+create index if not exists idx_langganan_partner on public.langganan_pembayaran (partner_id);
+
+-- ---------------------------------------------------------------------------
+-- 9.1 RPC catat_langganan_bulan  (dipakai Route Handler POST /api/langganan)
+--
+--     Mencatat pembayaran langganan bulan BERIKUTNYA untuk satu lisensi:
+--       1. cek lisensi milik toko yang sedang login dan bertipe 'langganan'
+--       2. tentukan bulan berikutnya = max(bulan_ke) + 1, minimal 2. Angka 2
+--          karena bulan 1 sudah dibayar saat pendaftaran dan tercatat di
+--          licenses.komisi_amount, bukan di tabel ini -- supaya tidak dobel
+--       3. komisi = (harga_jual / 12) x tier_rate -- tier_rate tersimpan di
+--          baris lisensi, jadi memakai tier saat transaksi, bukan tier sekarang
+--       4. tambah ke partners.komisi_total
+--
+--     Tulis hanya lewat fungsi ini (security definer) supaya nomor bulan tidak
+--     bisa diisi sendiri oleh klien.
+-- ---------------------------------------------------------------------------
+drop function if exists public.catat_langganan_bulan(uuid);
+create or replace function public.catat_langganan_bulan(p_license_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_partner_id uuid;
+  v_lic        public.licenses;
+  v_bulan_ke   integer;
+  v_harga_bul  integer;
+  v_komisi     integer;
+begin
+  v_partner_id := public.current_partner_id();
+
+  if v_partner_id is null then
+    raise exception 'PARTNER_NOT_FOUND';
+  end if;
+
+  select l.* into v_lic
+    from public.licenses l
+   where l.id = p_license_id
+     and l.partner_id = v_partner_id;
+
+  if not found then
+    raise exception 'LICENSE_NOT_FOUND';
+  end if;
+
+  if v_lic.license_type <> 'langganan' then
+    raise exception 'NOT_SUBSCRIPTION';
+  end if;
+
+  select greatest(coalesce(max(lp.bulan_ke), 0) + 1, 2) into v_bulan_ke
+    from public.langganan_pembayaran lp
+   where lp.license_id = p_license_id;
+
+  if v_bulan_ke > 12 then
+    raise exception 'SUBSCRIPTION_DONE';
+  end if;
+
+  if exists (
+    select 1 from public.langganan_pembayaran
+     where license_id = p_license_id and bulan_ke = v_bulan_ke
+  ) then
+    raise exception 'ALREADY_RECORDED';
+  end if;
+
+  v_harga_bul := round(coalesce(v_lic.harga_jual, 0) / 12.0);
+  v_komisi    := round(v_harga_bul * coalesce(v_lic.tier_rate, 0) / 100)::integer;
+
+  insert into public.langganan_pembayaran (license_id, partner_id, bulan_ke, komisi_toko)
+  values (p_license_id, v_partner_id, v_bulan_ke, v_komisi);
+
+  update public.partners
+     set komisi_total = komisi_total + v_komisi
+   where id = v_partner_id;
+
+  return v_komisi;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 10. View toko_rekap -- SATU sumber angka untuk Home & Profile
+--
+--     Homepage dan Profile mengulang hitungan yang sama, dan angkanya bisa
+--     berbeda begitu salah satu query gagal diam-diam. View ini menghitung
+--     semuanya di database, jadi:
+--       - total_key         = jumlah baris licenses, BUKAN counter
+--                             total_terjual yang bisa melenceng kalau key
+--                             dibuat lewat SQL/import
+--       - bundle/app        = jumlah key per tipe paket
+--       - komisi_penjualan  = SUM(licenses.komisi_amount)
+--       - komisi_langganan  = SUM(langganan_pembayaran.komisi_toko)
+--       - total_komisi      = penjualan + langganan (akumulasi, bukan counter)
+--       - langganan_per_key = { "<license_id>": bulan_terakhir } untuk badge
+--
+--     `security_invoker = true` (PostgreSQL 15+) membuat RLS pada tabel di
+--     bawahnya ikut berlaku ketika view dibaca, jadi satu toko tidak mungkin
+--     melihat angka toko lain. Tanpa opsi ini view berjalan sebagai pemilik
+--     view (membypass RLS) dan akan menjumlahkan SELURUH lisensi.
+-- ---------------------------------------------------------------------------
+create or replace view public.toko_rekap
+with (security_invoker = true)
+as
+select
+  p.id                                as partner_id,
+  p.user_id,
+  p.email,
+  p.nama_toko,
+  p.no_hp,
+  p.alamat,
+  p.status,
+  p.license_quota                     as sisa,
+  p.total_terjual                     as total_terjual_counter,
+  p.komisi_total                      as komisi_total_counter,
+  coalesce(k.total_key, 0)            as total_key,
+  coalesce(k.bundle_count, 0)         as bundle_count,
+  coalesce(k.app_count, 0)            as app_count,
+  coalesce(k.komisi_penjualan, 0)     as komisi_penjualan,
+  coalesce(lg.komisi_langganan, 0)    as komisi_langganan,
+  coalesce(k.komisi_penjualan, 0)
+    + coalesce(lg.komisi_langganan, 0) as total_komisi,
+  coalesce(lg.per_key, '{}'::jsonb)   as langganan_per_key
+from public.partners p
+left join lateral (
+  select count(*)::integer                                        as total_key,
+         (count(*) filter (where l.paket_type = 'bundle'))::integer   as bundle_count,
+         (count(*) filter (where l.paket_type = 'app_only'))::integer as app_count,
+         coalesce(sum(l.komisi_amount), 0)::integer                 as komisi_penjualan
+    from public.licenses l
+   where l.partner_id = p.id
+) k on true
+left join lateral (
+  select coalesce(sum(g.komisi), 0)::integer                    as komisi_langganan,
+         jsonb_object_agg(g.license_id::text, g.bulan_terakhir) as per_key
+    from (
+      select lp.license_id,
+             max(lp.bulan_ke)::integer    as bulan_terakhir,
+             sum(lp.komisi_toko)::integer as komisi
+        from public.langganan_pembayaran lp
+       where lp.partner_id = p.id
+       group by lp.license_id
+    ) g
+) lg on true;
+
+-- ---------------------------------------------------------------------------
+-- 10.1 Repair: samakan counter total_terjual dengan jumlah baris licenses
+--
+--     `partners.total_terjual` adalah counter yang dinaikkan RPC
+--     `generate_license`, tapi kalau key pernah ditambah lewat SQL/import atau
+--     lewat seed, counter-nya tertinggal. Efeknya tier toko salah (tier dibaca
+--     dari counter itu) dan angka Home/Profile tidak sama dengan key yang
+--     benar-benar ada.
+--
+--     Statement ini idempotent dan aman: hanya menyamakan counter ke kenyataan,
+--     tidak menghapus key dan tidak mengubah komisi. Jalankan ulang schema.sql
+--     kapan saja untuk memperbaikinya lagi.
+-- ---------------------------------------------------------------------------
+update public.partners p
+   set total_terjual = k.total_key
+  from (
+    select partner_id, count(*)::integer as total_key
+      from public.licenses
+     group by partner_id
+  ) k
+ where k.partner_id = p.id
+   and p.total_terjual is distinct from k.total_key;
+
+-- toko yang belum punya key sama sekali -> samakan juga ke 0
+update public.partners p
+   set total_terjual = 0
+ where p.total_terjual is distinct from 0
+   and not exists (select 1 from public.licenses l where l.partner_id = p.id);
+
+-- ---------------------------------------------------------------------------
+-- 11. Row Level Security
 --    Client (browser) hanya boleh membaca/menulis datanya sendiri.
 --    Penulisan licenses hanya lewat RPC SECURITY DEFINER (dari Route Handler).
 -- ---------------------------------------------------------------------------
@@ -462,19 +792,44 @@ drop policy if exists "licenses_insert_own" on public.licenses;
 drop policy if exists "licenses_update_own" on public.licenses;
 drop policy if exists "licenses_delete_own" on public.licenses;
 
+-- langganan_pembayaran: toko hanya boleh MEMBACA pencatatan bulanannya.
+-- Menulis harus lewat RPC catat_langganan_bulan() supaya nomor bulan & komisi
+-- tidak bisa dipalsukan klien.
+alter table public.langganan_pembayaran enable row level security;
+
+drop policy if exists "langganan_pembayaran_select_own" on public.langganan_pembayaran;
+create policy "langganan_pembayaran_select_own" on public.langganan_pembayaran
+  for select using (partner_id = public.current_partner_id());
+
+drop policy if exists "langganan_pembayaran_insert_own" on public.langganan_pembayaran;
+drop policy if exists "langganan_pembayaran_update_own" on public.langganan_pembayaran;
+drop policy if exists "langganan_pembayaran_delete_own" on public.langganan_pembayaran;
+
+-- produk: katalog harga dikelola admin portal, jadi toko tidak diberi akses.
+-- Bacanya cukup lewat RPC resolve_produk_harga() (security definer). RLS +
+-- revoke-nya diurus admin-schema.sql; blok ini supaya aman kalau file admin
+-- belum pernah dijalankan.
+alter table public.produk enable row level security;
+revoke all on public.produk from anon, authenticated;
+grant select, insert, update, delete on public.produk to service_role;
+
 -- ---------------------------------------------------------------------------
--- 9. Grants
+-- 12. Grants
 -- ---------------------------------------------------------------------------
 grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on all tables in schema public to service_role;
 grant select, update on public.partners to authenticated;
 grant select on public.licenses to authenticated;
+grant select on public.langganan_pembayaran to authenticated;
+grant select on public.toko_rekap to authenticated, service_role;
 grant execute on function public.current_partner_id() to anon, authenticated, service_role;
-grant execute on function public.generate_license(text, text, text, text, text, text) to authenticated, service_role;
+grant execute on function public.generate_license(text, text, text, text, text, text, uuid) to authenticated, service_role;
 grant execute on function public.activate_license(text, text, text, text) to service_role;
 grant execute on function public.tier_rate_of(integer) to anon, authenticated, service_role;
 grant execute on function public.tier_name_of(integer) to anon, authenticated, service_role;
 grant execute on function public.base_commission_of(text) to anon, authenticated, service_role;
+grant execute on function public.resolve_produk_harga(uuid, text) to service_role;
+grant execute on function public.catat_langganan_bulan(uuid) to authenticated, service_role;
 
 -- Catatan: bucket storage `store-logos` tidak lagi dipakai — fitur upload logo
 -- toko sudah dihapus (portal memakai icon toko statis). Bucket di database yang
@@ -484,7 +839,7 @@ grant execute on function public.base_commission_of(text) to anon, authenticated
 --     delete from storage.buckets where id = 'store-logos';
 
 -- ---------------------------------------------------------------------------
--- 10. SETUP TOKO
+-- 13. SETUP TOKO
 --     Daftarkan akun lebih dulu di:
 --       Supabase Dashboard > Authentication > Users > Add user
 --       (centang "Auto Confirm User" supaya bisa langsung login)
@@ -501,6 +856,11 @@ grant execute on function public.base_commission_of(text) to anon, authenticated
 --   Lihat daftar toko:
 --   select id, email, nama_toko, license_quota, total_terjual, komisi_total
 --     from public.partners order by created_at;
+--
+--   Ganti harga acuan komisi (dipakai generate_license untuk key BARU):
+--   update public.produk set harga_sekali_bayar      = 500000,
+--                           harga_langganan_tahunan = 250000
+--    where nama_apariksi = 'POS AMD';
 --
 --   Reset lisensi yang terikat ke komputer salah (permintaan pembeli):
 --   update public.licenses

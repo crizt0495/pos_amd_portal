@@ -17,8 +17,21 @@ import type { License } from '@/types';
  *
  * Kolom `alamat` sudah tersimpan sejak awal (lihat `licenses.alamat` di
  * schema.sql) — dulu hanya tidak pernah ditampilkan.
+ *
+ * `langgananPerKey` berisi bulan langganan terakhir per lisensi, keyed by
+ * `license.id`. Kalau sebuah lisensi langganan tidak ada di sana, berarti baru
+ * dibuat (bulan 1 sudah dibayar saat pendaftaran), jadi badge tidak menyebut
+ * nomor bulan — tidak perlu menebak.
  */
-export function KeyList({ licenses, namaToko }: { licenses: License[]; namaToko: string }) {
+export function KeyList({
+  licenses,
+  namaToko,
+  langgananPerKey = {},
+}: {
+  licenses: License[];
+  namaToko: string;
+  langgananPerKey?: Record<string, number>;
+}) {
   const [cari, setCari] = React.useState('');
   const aksi = useClickCooldown(1500);
   const [tersalin, setTersalin] = React.useState<string | null>(null);
@@ -152,19 +165,25 @@ export function KeyList({ licenses, namaToko }: { licenses: License[]; namaToko:
                   </span>
                 </div>
 
-                {/* Baris 2: alamat pembeli (truncate + hover untuk full) */}
-                {l.alamat ? (
-                  <p
-                    title={l.alamat}
-                    className="mt-1 truncate text-[12px] text-zinc-500"
-                  >
-                    {l.alamat}
-                  </p>
-                ) : null}
+                {/* Baris 2: harga acuan + alamat pembeli (truncate + hover) */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-zinc-500">
+                  {l.harga_jual ? (
+                    <span className="tabular shrink-0">Harga {rupiah(l.harga_jual)}</span>
+                  ) : null}
+                  {l.alamat ? (
+                    <span title={l.alamat} className="min-w-0 truncate">
+                      {l.alamat}
+                    </span>
+                  ) : null}
+                </div>
 
-                {/* Baris 3: status + serial key, tombol Salin & WA rata kanan */}
+                {/* Baris 3: status + jenis + serial key, tombol Salin & WA kanan */}
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <StatusBadge status={l.status} />
+                  <JenisBadge
+                    licenseType={l.license_type}
+                    bulan={langgananPerKey[l.id] ?? 0}
+                  />
                   <code className="tabular truncate text-[11px] tracking-wide text-zinc-500">
                     {l.serial_key}
                   </code>
@@ -211,6 +230,37 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${s.className}`}>
       {s.text}
+    </span>
+  );
+}
+
+/**
+ * Badge jenis pembelian: Sekali Bayar atau Langganan.
+ *
+ * Untuk langganan yang bulan 2 dan seterusnya sudah dibayar, labelnya
+ * menyebut nomor bulan ("Langganan · Bulan 3") supaya toko bisa langsung tahu
+ * pelanggan sudah bayar berapa bulan. Bulan 1 tidak disebut karena sudah
+ * tercatat di komisi penjualan saat pendaftaran.
+ */
+function JenisBadge({ licenseType, bulan }: { licenseType: string; bulan: number }) {
+  if (licenseType === 'langganan') {
+    return (
+      <span
+        title={
+          bulan > 0
+            ? `Langganan, sudah dibayar sampai bulan ${bulan}`
+            : 'Langganan, baru dibuat (bulan 1 dibayar saat pendaftaran)'
+        }
+        className="shrink-0 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700"
+      >
+        {bulan > 0 ? `Langganan · Bulan ${bulan}` : 'Langganan'}
+      </span>
+    );
+  }
+
+  return (
+    <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">
+      Sekali
     </span>
   );
 }
