@@ -152,61 +152,67 @@ export function KeyList({
 
             return (
               <li key={l.id} className="px-3.5 py-3 transition hover:bg-zinc-50">
-                {/* Baris 1: tanggal - paket - nama konsumen, komisi rata kanan */}
                 <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-zinc-600">
-                    <span className="truncate">
+                  {/* Kolom kiri: detail transaksi */}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] leading-relaxed text-zinc-600">
                       {tanggalPanjang(l.created_at)} - {PAKET_LABEL[l.paket_type]} -{' '}
                       {l.pembeli_nama}
-                    </span>
-                  </p>
-                  <span className="tabular shrink-0 text-right text-[13px] font-semibold text-zinc-900">
-                    {rupiah(l.komisi_amount)}
-                  </span>
-                </div>
+                    </p>
 
-                {/* Baris 2: harga acuan + alamat pembeli (truncate + hover) */}
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-zinc-500">
-                  {l.harga_jual ? (
-                    <span className="tabular shrink-0">Harga {rupiah(l.harga_jual)}</span>
-                  ) : null}
-                  {l.alamat ? (
-                    <span title={l.alamat} className="min-w-0 truncate">
-                      {l.alamat}
-                    </span>
-                  ) : null}
-                </div>
+                    {/* Baris harga acuan + alamat */}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-zinc-500">
+                      {l.harga_jual ? (
+                        <span className="tabular shrink-0">Harga {rupiah(l.harga_jual)}</span>
+                      ) : null}
+                      {l.alamat ? (
+                        <span title={l.alamat} className="min-w-0 truncate">
+                          {l.alamat}
+                        </span>
+                      ) : null}
+                    </div>
 
-                {/* Baris 3: status + jenis + serial key, tombol Salin & WA kanan */}
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <StatusBadge status={l.status} />
-                  <JenisBadge
-                    licenseType={l.license_type}
-                    bulan={langgananPerKey[l.id] ?? 0}
-                  />
-                  <code className="tabular truncate text-[11px] tracking-wide text-zinc-500">
-                    {l.serial_key}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => aksi.run(() => void salinDanWA(l), l.id)}
-                    disabled={aksi.locked(l.id)}
-                    title={
-                      adaWa
-                        ? 'Salin serial key lalu buka WhatsApp pembeli'
-                        : 'Salin serial key (nomor pembeli tidak ada)'
-                    }
-                    className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
-                  >
-                    {baruTersalin ? (
-                      <Check className="h-3 w-3 text-emerald-600" />
-                    ) : adaWa ? (
-                      <MessageCircle className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                    {baruTersalin ? 'Tersalin' : 'Salin & WA'}
-                  </button>
+                    {/* Badge status + jenis + serial key. Serial boleh
+                        truncate tapi jangan sembunyi: max-width cukup supaya
+                        masih kelihatan di layar HP 360px. */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={l.status} />
+                      <JenisBadge
+                        licenseType={l.license_type}
+                        bulan={langgananPerKey[l.id] ?? 0}
+                      />
+                      <code className="tabular max-w-[150px] truncate text-[11px] tracking-wide text-zinc-500">
+                        {l.serial_key}
+                      </code>
+                    </div>
+                  </div>
+
+                  {/* Kolom kanan: komisi (rata kanan, bold) + tombol Salin & WA */}
+                  <div className="shrink-0 text-right">
+                    <p className="tabular text-[13px] font-bold leading-tight text-zinc-900">
+                      {rupiah(l.komisi_amount)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => aksi.run(() => void salinDanWA(l), l.id)}
+                      disabled={aksi.locked(l.id)}
+                      title={
+                        adaWa
+                          ? 'Salin serial key lalu buka WhatsApp pembeli'
+                          : 'Salin serial key (nomor pembeli tidak ada)'
+                      }
+                      className="mt-1 ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
+                    >
+                      {baruTersalin ? (
+                        <Check className="h-3 w-3 text-emerald-600" />
+                      ) : adaWa ? (
+                        <MessageCircle className="h-3 w-3" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                      {baruTersalin ? 'Tersalin' : 'Salin & WA'}
+                    </button>
+                  </div>
                 </div>
               </li>
             );
