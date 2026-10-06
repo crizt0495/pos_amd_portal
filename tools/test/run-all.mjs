@@ -221,9 +221,9 @@ if (run('portal') || run('all')) {
   // Objek database yang dipakai kode didefinisikan di supabase/schema.sql,
   // yang dijalankan manual di Supabase SQL Editor. Kalau nama di kode dan di
   // SQL berbeda, seluruh angka jadi null/0 di produksi -- persis kelas bug
-  // yang dulu membuat kartu Home 0/0. Karena file SQL tidak ikut ter-deploy,
-  // satu sisi yang di-rename harus mengubah sisi yang lain juga; cek ini
-  // yangytu menutup celah itu.
+  // yang dulu membuat kartu Home jadi nol semua. Karena file SQL tidak ikut
+  // ter-deploy, satu sisi yang di-rename harus mengubah sisi yang lain juga;
+  // cek ini yang menutup celah itu.
   const schemaSql = fs.readFileSync(path.join(PORTAL, 'supabase', 'schema.sql'), 'utf8');
   const srcFiles = [];
   const collectSrc = (dir) => {

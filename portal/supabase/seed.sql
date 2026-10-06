@@ -66,7 +66,7 @@ update public.partners
 
 -- ---------------------------------------------------------------------------
 -- 2. Riwayat Serial Key contoh
---    8 key: 6 Bundle + 2 Aplikasi, supaya angka di Home bukan 0/0 dan tier
+--    8 key: 6 Bundle + 2 Aplikasi, supaya angka di Home bukan nol semua dan tier
 --    sudah Silver (6 key ke atas = 10%).
 --
 --    komisi_amount memakai model resmi: harga acuan dari tabel `produk`

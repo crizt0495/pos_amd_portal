@@ -13,7 +13,7 @@ import type { License, Partner, RekapToko } from '@/types';
  *  Home, Profile, dan halaman Aktivasi memanggil fungsi ini. Jangan menghitung
  *  ulang angka di dalam halaman: begitu query-nya sedikit berbeda di satu
  *  halaman, angka Home dan Profile bisa tidak cocok — persis seperti bug yang
- *  dulu membuat kartu Home jadi 0/0 sementara Profile benar.
+ *  dulu membuat kartu Home jadi nol semua sementara Profile benar.
  *
  *  SEMUA ANGKA DIAMBIL DARI VIEW `toko_rekap`
  *  (supabase/schema.sql bagian 10). Alasannya, bukan sekadar "`view` lebih
@@ -181,15 +181,32 @@ export const getTokoStats = cache(
     // Panggilan 1: semua angka toko dalam satu baris.
     const rekap = await bacaRekap(userId);
 
-    // Panggilan 2 (hanya kalau perlu daftar key): 20 key terbaru.
+    // Panggilan 2: baris partners, HANYA kalau view toko_rekap belum ada.
+    //
+    // Baris ini dipakai dua hal di jalur cadangan: sumber angka manual DAN
+    // sumber partner_id untuk mengambil daftar key. Dulu daftar key selalu
+    // di-query dengan UUID nol karena partner_id diambil dari `rekap` yang
+    // memang null, sehingga Riwayat kosong walau key-nya ada di database.
+    let partner: Partner | null = null;
+    if (!rekap) {
+      const { data: partnerRow, error: errorPartner } = await supabase
+        .from('partners')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (errorPartner) {
+        console.error('[toko-stats] gagal baca baris partners:', errorPartner.message);
+      }
+      partner = (partnerRow ?? null) as Partner | null;
+    }
+
+    // Panggilan 3 (hanya kalau perlu daftar key): 20 key terbaru.
     const daftar = withLicenses
       ? await supabase
           .from('licenses')
           .select(KOLOM_KEY)
-          .eq(
-            'partner_id',
-            rekap?.partner_id ?? '00000000-0000-0000-0000-000000000000',
-          )
+          .eq('partner_id', rekap?.partner_id ?? partner?.id ?? '00000000-0000-0000-0000-000000000000')
           .order('created_at', { ascending: false })
           .limit(BATAS_DAFTAR_KEY)
       : { data: null, error: null };
@@ -242,17 +259,6 @@ export const getTokoStats = cache(
 
     /* ---------------- cadangan: view belum ada ---------------- */
 
-    const { data: partnerRow, error: errorPartner } = await supabase
-      .from('partners')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (errorPartner) {
-      console.error('[toko-stats] gagal baca baris partners:', errorPartner.message);
-    }
-
-    const partner = (partnerRow ?? null) as Partner | null;
     if (!partner) return kosong(null);
 
     const partnerId = partner.id;
@@ -272,7 +278,12 @@ export const getTokoStats = cache(
         .eq('partner_id', partnerId)
         .eq('paket_type', 'app_only'),
       // Tanpa `limit`: SUM harus menghitung SELURUH key, bukan 20 terbaru.
-      supabase.from('licenses').select('komisi_amount').eq('partner_id', partnerId),
+      // `count: 'exact'` WAJIB: tanpanya `semua.count` selalu null dan
+      // `totalKey` jatuh ke 0, sehingga Home menampilkan "0 terjual".
+      supabase
+        .from('licenses')
+        .select('komisi_amount', { count: 'exact' })
+        .eq('partner_id', partnerId),
       supabase.from('langganan_pembayaran').select('license_id, komisi_toko').eq('partner_id', partnerId),
     ]);
 
@@ -294,7 +305,9 @@ export const getTokoStats = cache(
       bulanPerKey[c.license_id] = Math.max(bulanPerKey[c.license_id] ?? 0, angka(c.bulan_ke));
     }
 
-    const totalKey = semua.count ?? 0;
+    // `count: 'exact'` di query di atas menyediakan angka ini; `baris.length`
+    // dipakai sebagai pengaman kalau count tidak ikut terkirim.
+    const totalKey = semua.count ?? baris.length;
     const sisa = angka(partner.license_quota);
     const terjual = totalKey;
 
