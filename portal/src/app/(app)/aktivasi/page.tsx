@@ -41,8 +41,8 @@ export default async function AktivasiPage() {
         </div>
 
         <p className="mb-2.5 text-[12px] text-zinc-500">
-          Setiap pelanggan langganan yang membayar, tekan tombolnya supaya komisi bulan itu masuk ke
-          Total Komisi.
+          Setiap pelanggan langganan yang sudah membayar, komisi bulanannya masuk otomatis ke Total
+          Komisi. Toko cukup lihat, tidak perlu mencatat manual.
         </p>
 
         <LanggananList data={langganan} />
