@@ -675,6 +675,95 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- 9.2 RPC perpanjang_langganan -- paket langganan berlanjut 1 tahun
+--
+--    Saat pelanggan membayar setahun penuh:
+--      1. expires_at mundur 1 tahun dari hari ini atau dari expires_at lama
+--         (kalau expires_at sudah lewat, hitung dari hari ini supaya toko
+--         dapat MASA BERAKU yang baru, bukan dihitung dari yang sudah
+--         kedaluwarsa)
+--      2. komisi langganan baru = harga_jual -> tier_rate  (1 tahun penuh)
+--      3. baris langganan_pembayaran dibuat untuk audit (bulan_ke =
+--         bulan_terakhir + 1, komisi = yearly)
+--      4. partners.komisi_total ditambah
+--
+--    Yang beli setahun langsung dapat komisi penuh (10% × 250.000 = 25.000
+--    untuk tier Silver), jadi toko makin senang menjual produk langganan.
+-- ---------------------------------------------------------------------------
+drop function if exists public.perpanjang_langganan(uuid);
+create or replace function public.perpanjang_langganan(p_license_id uuid)
+returns table (expires_at timestamptz, komisi integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_partner_id uuid;
+  v_lic        public.licenses;
+  v_bulan_ke   integer;
+  v_komisi     integer;
+  v_new_exp    timestamptz;
+begin
+  v_partner_id := public.current_partner_id();
+
+  if v_partner_id is null then
+    raise exception 'PARTNER_NOT_FOUND';
+  end if;
+
+  select l.* into v_lic
+    from public.licenses l
+   where l.id = p_license_id
+     and l.partner_id = v_partner_id;
+
+  if not found then
+    raise exception 'LICENSE_NOT_FOUND';
+  end if;
+
+  if v_lic.license_type <> 'langganan' then
+    raise exception 'NOT_SUBSCRIPTION';
+  end if;
+
+  -- expires_at baru = dari sekarang ATAU dari expires_at lama, mana yang
+  -- lebih jauh di masa depan. Kalau belum expired, tinggal tambah 1 tahun.
+  v_new_exp := greatest(
+    coalesce(v_lic.expires_at, now()),
+    now()
+  ) + interval '1 year';
+
+  -- komisi langganan untuk 1 tahun penuh
+  v_komisi := round(coalesce(v_lic.harga_jual, 0) * coalesce(v_lic.tier_rate, 0) / 100)::integer;
+
+  update public.licenses
+     set expires_at = v_new_exp,
+         updated_at = now()
+   where id = v_lic.id;
+
+  -- catat pembayaran perpanjangan di langganan_pembayaran
+  select greatest(coalesce(max(lp.bulan_ke), 0) + 1, 1) into v_bulan_ke
+    from public.langganan_pembayaran lp
+   where lp.license_id = p_license_id;
+
+  if v_bulan_ke > 12 then
+    -- cycle penuh; untuk yang ke-13, pakai bulan_ke=12 lagi ( komusi
+    -- perpanjangan per tahun dicatat sebagai "renewal ke cycle 2" dan
+    -- UI akan tetap menampilkannya sebagai "Terbayar 12 bulan").
+    v_bulan_ke := 12;
+  end if;
+
+  -- upsert: jika untuk bulan_ke yang sama sudah ada, abaikan (sudah dicatat)
+  insert into public.langganan_pembayaran (license_id, partner_id, bulan_ke, komisi_toko)
+  values (v_lic.id, v_partner_id, v_bulan_ke, v_komisi)
+  on conflict (license_id, bulan_ke) do nothing;
+
+  update public.partners
+     set komisi_total = komisi_total + v_komisi
+   where id = v_partner_id;
+
+  return query select v_new_exp, v_komisi;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 10. View toko_rekap -- SATU sumber angka untuk Home & Profile
 --
 --     Homepage dan Profile mengulang hitungan yang sama, dan angkanya bisa
@@ -830,6 +919,7 @@ grant execute on function public.tier_name_of(integer) to anon, authenticated, s
 grant execute on function public.base_commission_of(text) to anon, authenticated, service_role;
 grant execute on function public.resolve_produk_harga(uuid, text) to service_role;
 grant execute on function public.catat_langganan_bulan(uuid) to authenticated, service_role;
+grant execute on function public.perpanjang_langganan(uuid) to authenticated, service_role;
 
 -- Catatan: bucket storage `store-logos` tidak lagi dipakai — fitur upload logo
 -- toko sudah dihapus (portal memakai icon toko statis). Bucket di database yang

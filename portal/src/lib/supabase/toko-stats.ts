@@ -96,6 +96,7 @@ const KOLOM_KEY = [
   'komisi_amount',
   'harga_jual',
   'tier_rate',
+  'expires_at',
   'created_at',
 ].join(', ');
 

@@ -160,7 +160,7 @@ export function KeyList({
                       {l.pembeli_nama}
                     </p>
 
-                    {/* Baris harga acuan + alamat */}
+                    {/* Baris harga acuan + alamat + expired (untuk langganan) */}
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-zinc-500">
                       {l.harga_jual ? (
                         <span className="tabular shrink-0">Harga {rupiah(l.harga_jual)}</span>
@@ -168,6 +168,11 @@ export function KeyList({
                       {l.alamat ? (
                         <span title={l.alamat} className="min-w-0 truncate">
                           {l.alamat}
+                        </span>
+                      ) : null}
+                      {l.license_type === 'langganan' && l.expires_at ? (
+                        <span className="tabular shrink-0 text-zinc-500">
+                          · Expired {tanggalPanjang(l.expires_at)}
                         </span>
                       ) : null}
                     </div>

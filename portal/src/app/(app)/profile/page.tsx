@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import ProfileForm from './form';
 
+import { getLanggananToko } from '@/lib/supabase/langganan';
 import { getPortalUser } from '@/lib/supabase/session';
 import { getTokoStats } from '@/lib/supabase/toko-stats';
 
@@ -16,7 +17,12 @@ export default async function ProfilePage() {
   // Angka "Total terjual" & "Sisa kuota" di bawah berasal dari fungsi yang
   // sama dengan Home, jadi keduanya tidak mungkin berbeda. Parameter `false`
   // karena halaman ini tidak butuh daftar key — hemat 3 panggilan database.
-  const { partner, terjual, sisa } = await getTokoStats(user.id, false);
+  // Daftar langganan dipakai di section "Riwayat Komisi Langganan".
+  const [stats, langganan] = await Promise.all([
+    getTokoStats(user.id, false),
+    getLanggananToko(user.id),
+  ]);
+  const { partner, terjual, sisa } = stats;
 
   return (
     <ProfileForm
@@ -28,6 +34,7 @@ export default async function ProfilePage() {
       email={user.email}
       totalTerjual={terjual}
       quota={sisa}
+      langganan={langganan}
     />
   );
 }

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { LanggananList } from '@/components/portal/langganan-list';
 import { Field, Input, InputTelepon, Textarea } from '@/components/ui/form';
 import { bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
@@ -27,6 +28,7 @@ interface Props {
   email: string;
   totalTerjual: number;
   quota: number;
+  langganan: import('@/lib/supabase/langganan').LanggananToko[];
 }
 
 /** Warna bulatan icon toko mengikuti tier toko (Bronze → Platinum). */
@@ -37,7 +39,7 @@ const TIER_ICON_BG: Record<TierName, string> = {
   Platinum: 'bg-slate-800',
 };
 
-export default function ProfileForm({ initial, email, totalTerjual, quota }: Props) {
+export default function ProfileForm({ initial, email, totalTerjual, quota, langganan }: Props) {
   const router = useRouter();
 
   const [namaToko, setNamaToko] = React.useState(initial.nama_toko);
@@ -226,6 +228,21 @@ export default function ProfileForm({ initial, email, totalTerjual, quota }: Pro
           </div>
         ) : null}
       </form>
+
+      {/* Riwayat Komisi Langganan — dipindah dari Aktivasi ke Profile */}
+      <section className="mt-8">
+        <div className="mb-2.5 flex items-baseline justify-between gap-2">
+          <h2 className="text-[15px] font-bold">Riwayat Komisi Langganan</h2>
+          <span className="text-[11px] text-zinc-500">
+            {langganan.length} langganan aktif
+          </span>
+        </div>
+        <p className="mb-2.5 text-[12px] text-zinc-500">
+          Setiap pelanggan langganan yang sudah membayar, komisi bulanannya masuk otomatis ke Total
+          Komisi. Toko cukup lihat, tidak perlu mencatat manual.
+        </p>
+        <LanggananList data={langganan} />
+      </section>
 
       {/* Penghargaan Title */}
       <section className="mb-20 mt-8">
