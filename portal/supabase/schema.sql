@@ -677,6 +677,12 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 9.2 RPC perpanjang_langganan -- paket langganan berlanjut 1 tahun
 --
+--    CATATAN (2026-10): Tombol "Perpanjang +1 Tahun" SUDAH DIPINDAH ke Admin
+--    Portal (menu Key). Toko tidak lagi bisa memanggil fungsi ini — EXECUTE
+--    untuk anon/authenticated di-revoke. Admin memakai `admin_perpanjang_langganan`
+--    (lihat supabase/admin-schema.sql di repo pos_amd_admin_portal). Fungsi ini
+--    tetap dipertahankan untuk service_role / migrasi data lama.
+--
 --    Saat pelanggan membayar setahun penuh:
 --      1. expires_at mundur 1 tahun dari hari ini atau dari expires_at lama
 --         (kalau expires_at sudah lewat, hitung dari hari ini supaya toko
@@ -919,7 +925,11 @@ grant execute on function public.tier_name_of(integer) to anon, authenticated, s
 grant execute on function public.base_commission_of(text) to anon, authenticated, service_role;
 grant execute on function public.resolve_produk_harga(uuid, text) to service_role;
 grant execute on function public.catat_langganan_bulan(uuid) to authenticated, service_role;
-grant execute on function public.perpanjang_langganan(uuid) to authenticated, service_role;
+-- FIX 2026-10: toko tidak boleh memperpanjang sendiri lewat RPC; admin yang
+-- mencatat via admin_perpanjang_langganan. Dicabut eksplisit karena Supabase
+-- memberi grant default EXECUTE untuk fungsi baru.
+revoke all on function public.perpanjang_langganan(uuid) from public, anon, authenticated;
+grant execute on function public.perpanjang_langganan(uuid) to service_role;
 
 -- Catatan: bucket storage `store-logos` tidak lagi dipakai — fitur upload logo
 -- toko sudah dihapus (portal memakai icon toko statis). Bucket di database yang
