@@ -32,8 +32,8 @@ export function LanggananList({ data }: { data: LanggananToko[] }) {
               </p>
               <p className="tabular mt-0.5 text-[12px] text-zinc-500">
                 {item.selesai
-                  ? 'Langganan lengkap 12 bulan'
-                  : `Terbayar ${item.bulanTerakhir} bulan · komisi terkumpul ${rupiah(item.komisiTerkumpul)}`}
+                  ? 'Paket tahunan lengkap 12 bulan'
+                  : `Terbayar ${item.bulanTerakhir} dari 12 bulan paket tahunan · komisi ${rupiah(item.komisiTerkumpul)} dari total paket ${rupiah(Math.round((Number(item.harga_jual) || 0) * (Number(item.tier_rate) || 0) / 100))}/tahun`}
               </p>
               <p className="tabular mt-0.5 truncate text-[11px] text-zinc-400">
                 {item.serial_key} · mulai {tanggalPanjang(item.created_at)}
@@ -51,10 +51,10 @@ export function LanggananList({ data }: { data: LanggananToko[] }) {
                   title={`Komisi bulan ${item.bulanBerikutnya} akan masuk otomatis saat pelanggan membayar.`}
                 >
                   <span className="block leading-tight">
-                    Bulan {item.bulanBerikutnya} · {rupiah(item.komisiBerikutnya)}
+                    Bulan {item.bulanBerikutnya}/12 · {rupiah(item.komisiBerikutnya)}
                   </span>
                   <span className="block text-[10px] font-medium text-zinc-500">
-                    Menunggu pembayaran
+                    Menunggu Pembayaran Toko
                   </span>
                 </div>
               )}

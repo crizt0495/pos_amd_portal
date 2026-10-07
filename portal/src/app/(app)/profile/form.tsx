@@ -259,9 +259,10 @@ export default function ProfileForm({
             {langganan.length} langganan aktif
           </span>
         </div>
-        <p className="mb-2.5 text-[12px] text-zinc-500">
+        <p className="mb-2.5 text-[12px] text-zinc-500" title="Komisi dicairkan per bulan, ditotal per tahun">
           Setiap pelanggan langganan yang sudah membayar, komisi bulanannya masuk otomatis ke Total
-          Komisi. Toko cukup lihat, tidak perlu mencatat manual.
+          Komisi. Toko cukup lihat, tidak perlu mencatat manual. (Paket langganan = 12 bulan;
+          komisi cair per bulan, ditotal per tahun.)
         </p>
         <LanggananList data={langganan} />
       </section>
