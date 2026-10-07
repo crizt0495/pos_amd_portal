@@ -230,21 +230,26 @@ create table if not exists public.tier_konfigurasi (
 );
 
 -- Hanya isi baris yang belum ada: jangan menimpa penyuntingan admin.
+-- Tier terendah sengaja mulai dari 0 lisensi supaya toko baru (0 key) sudah
+-- punya tier + persen, bukan NULL, saat membuat key pertamanya.
 insert into public.tier_konfigurasi (nama, min_terjual, batas_atas, rate, urutan)
 values
-  ('Bronze',   1,  5,    5.00, 1),
+  ('Bronze',   0,  5,    5.00, 1),
   ('Silver',   6,  10,   10.00, 2),
   ('Gold',     11, 29,   20.00, 3),
   ('Platinum', 30, null, 30.00, 4)
 on conflict (nama) do nothing;
 
 -- Tier yang berlaku untuk sebuah jumlah lisensi terjual.
+-- Kalau jumlahnya di bawah tier terendah (mis. toko baru, 0 key), pakai tier
+-- terendah — bukan NULL, supaya key pertama tetap dapat persen Bronze.
 create or replace function public.tier_dari(p_total_terjual integer)
 returns table (nama text, min_terjual integer, batas_atas integer, rate numeric)
 language sql stable as $$
   select t.nama, t.min_terjual, t.batas_atas, t.rate
     from public.tier_konfigurasi t
    where t.min_terjual <= coalesce(p_total_terjual, 0)
+      or t.min_terjual = (select min(min_terjual) from public.tier_konfigurasi)
    order by t.min_terjual desc
    limit 1;
 $$;
