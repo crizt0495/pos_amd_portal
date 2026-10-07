@@ -99,8 +99,8 @@ create table if not exists public.licenses (
   alamat          text,
   -- komisi final (rupiah bulat) saat key dibuat, sesuai tier saat itu
   komisi_amount   integer     not null default 0 check (komisi_amount >= 0),
-  tier            text        not null default 'Bronze',
-  tier_rate       numeric(5,2) not null default 5.00,
+  tier            text        not null default 'Tanpa Tier',
+  tier_rate       numeric(5,2) not null default 0,
   expires_at      timestamptz,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
@@ -147,6 +147,12 @@ end $$;
 alter table public.licenses add column if not exists pembeli_hp text;
 alter table public.licenses add column if not exists alamat text;
 alter table public.licenses add column if not exists komisi_amount integer not null default 0;
+
+-- Default kolom snapshot tidak lagi menebak tier/komisi. generate_license()
+-- selalu mengisi nilainya secara eksplisit; default 0 / 'Tanpa Tier' hanya
+-- untuk baris yang dibuat di luar RPC (mis. impor SQL).
+alter table public.licenses alter column tier      set default 'Tanpa Tier';
+alter table public.licenses alter column tier_rate set default 0;
 
 -- normalisasi nilai paket lama 'app' -> 'app_only'
 update public.licenses set paket_type = 'app_only' where paket_type = 'app';
@@ -204,33 +210,70 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------------
--- 5. Tier toko: Bronze 1-5 (5%) | Silver 6-10 (10%) | Gold 11-30 (20%) | Platinum 30+ (30%)
+-- 5. Tier toko — SATU sumber angka: tabel `tier_konfigurasi`
+--
+--    Dulu nama + persentase tier ditulis sebagai angka di fungsi SQL dan di
+--    TypeScript portal (`TIER_RULES`). Mengubah komisi berarti ubah kode dan
+--    deploy ulang. Sekarang semua aturan tier hidup di tabel ini; portal
+--    membacanya lewat RPC `tier_daftar` / `tier_rate_of` / `tier_name_of`.
+--
+--    Isi awal = aturan lama (Bronze 5 / Silver 10 / Gold 20 / Platinum 30)
+--    supaya perilaku tidak berubah sampai admin menyunting tabelnya.
 -- ---------------------------------------------------------------------------
+create table if not exists public.tier_konfigurasi (
+  nama          text primary key,
+  min_terjual   integer not null check (min_terjual >= 0),
+  batas_atas    integer check (batas_atas is null or batas_atas >= min_terjual),
+  rate          numeric(5,2) not null check (rate >= 0),
+  urutan        integer not null default 0,
+  updated_at    timestamptz not null default now()
+);
+
+-- Hanya isi baris yang belum ada: jangan menimpa penyuntingan admin.
+insert into public.tier_konfigurasi (nama, min_terjual, batas_atas, rate, urutan)
+values
+  ('Bronze',   1,  5,    5.00, 1),
+  ('Silver',   6,  10,   10.00, 2),
+  ('Gold',     11, 29,   20.00, 3),
+  ('Platinum', 30, null, 30.00, 4)
+on conflict (nama) do nothing;
+
+-- Tier yang berlaku untuk sebuah jumlah lisensi terjual.
+create or replace function public.tier_dari(p_total_terjual integer)
+returns table (nama text, min_terjual integer, batas_atas integer, rate numeric)
+language sql stable as $$
+  select t.nama, t.min_terjual, t.batas_atas, t.rate
+    from public.tier_konfigurasi t
+   where t.min_terjual <= coalesce(p_total_terjual, 0)
+   order by t.min_terjual desc
+   limit 1;
+$$;
+
+-- Seluruh aturan tier (dipakai kotak tier di halaman Profile).
+create or replace function public.tier_daftar()
+returns table (nama text, min_terjual integer, batas_atas integer, rate numeric)
+language sql stable as $$
+  select t.nama, t.min_terjual, t.batas_atas, t.rate
+    from public.tier_konfigurasi t
+   order by t.min_terjual asc;
+$$;
+
+-- Nama/persentase tier. NULL bila tabel belum diisi -> pemanggil menampilkan
+-- "Belum diatur admin", bukan mengarang 5/10/20/30.
 create or replace function public.tier_rate_of(p_total_terjual integer)
-returns numeric language sql immutable as $$
-  select case
-    when coalesce(p_total_terjual, 0) >= 30 then 30.00
-    when coalesce(p_total_terjual, 0) >= 11 then 20.00
-    when coalesce(p_total_terjual, 0) >= 6  then 10.00
-    else 5.00
-  end;
+returns numeric language sql stable as $$
+  select rate from public.tier_dari(p_total_terjual);
 $$;
 
 create or replace function public.tier_name_of(p_total_terjual integer)
-returns text language sql immutable as $$
-  select case
-    when coalesce(p_total_terjual, 0) >= 30 then 'Platinum'
-    when coalesce(p_total_terjual, 0) >= 11 then 'Gold'
-    when coalesce(p_total_terjual, 0) >= 6  then 'Silver'
-    else 'Bronze'
-  end;
+returns text language sql stable as $$
+  select nama from public.tier_dari(p_total_terjual);
 $$;
 
--- Dasar komisi: Bundle Rp 100.000 | Aplikasi Saja Rp 50.000
-create or replace function public.base_commission_of(p_paket text)
-returns integer language sql immutable as $$
-  select case when p_paket = 'bundle' then 100000 else 50000 end;
-$$;
+-- Nominal komisi cadangan lama DIHAPUS. Komisi sekarang murni
+-- harga `produk` (admin) x persen tier; kalau salah satu belum diisi, komisi
+-- Rp 0 — bukan angka karangan di kode.
+drop function if exists public.base_commission_of(text);
 
 -- ---------------------------------------------------------------------------
 -- 6. Katalog produk & harga acuan komisi
@@ -391,24 +434,22 @@ begin
     raise exception 'QUOTA_EXHAUSTED';
   end if;
 
-  -- tier dihitung dari total SEBELUM key ini dibuat
+  -- tier dihitung dari total SEBELUM key ini dibuat (baca tabel tier_konfigurasi)
   v_rate   := public.tier_rate_of(v_total);
   v_tier   := public.tier_name_of(v_total);
 
-  -- harga acuan dari katalog produk. Kalau produk belum terdaftar atau
-  -- harganya belum diisi, jatuh ke nominal lama base_commission_of() supaya
-  -- komisi tidak mendadak jadi Rp 0.
+  -- harga acuan dari katalog produk (dikelola admin portal). Kalau produk
+  -- belum terdaftar / harganya belum diisi, komisi = Rp 0. SENGAJA tidak ada
+  -- nominal cadangan di kode: admin portal adalah satu-satunya sumber harga.
   select rp.produk, rp.harga
     into v_produk_id, v_harga
   from public.resolve_produk_harga(p_produk_id, p_license_type) rp;
 
-  if coalesce(v_harga, 0) <= 0 then
-    v_harga := public.base_commission_of(p_paket_type);
-  end if;
-
   -- komisi = harga acuan x persen tier SAAT INI, disimpan sebagai snapshot di
   -- licenses.komisi_amount. Transaksi lama tidak ikut berubah saat tier naik.
-  v_komisi := round(v_harga * v_rate / 100)::integer;
+  -- `coalesce` dipakai supaya harga/rate yang belum diatur admin jadi 0, bukan
+  -- membuat insert gagal karena kolom NOT NULL.
+  v_komisi := round(coalesce(v_harga, 0) * coalesce(v_rate, 0) / 100)::integer;
 
   -- Langganan: harga di katalog adalah biaya per TAHUN, komisi dibayar per
   -- bulan. Yang dibayar saat pendaftaran adalah bulan 1 = 1/12 harga tahunan,
@@ -416,7 +457,7 @@ begin
   -- diduplikasi ke langganan_pembayaran, kalau tidak komisi bulan 1 akan
   -- terhitung dua kali saat Home menjumlahkan penjualan + langganan.
   if p_license_type = 'langganan' then
-    v_komisi := round((v_harga / 12.0) * v_rate / 100)::integer;
+    v_komisi := round((coalesce(v_harga, 0) / 12.0) * coalesce(v_rate, 0) / 100)::integer;
   end if;
 
   insert into public.licenses (
@@ -427,7 +468,7 @@ begin
   values (
     p_serial_key, v_partner_id, p_paket_type, p_license_type,
     p_pembeli_nama, p_pembeli_hp, p_alamat, v_produk_id, v_harga,
-    v_komisi, v_tier, v_rate, 'unused',
+    v_komisi, coalesce(v_tier, 'Tanpa Tier'), coalesce(v_rate, 0), 'unused',
     case when p_license_type = 'langganan' then now() + interval '12 months' else null end
   )
   returning * into v_license;
@@ -908,6 +949,15 @@ alter table public.produk enable row level security;
 revoke all on public.produk from anon, authenticated;
 grant select, insert, update, delete on public.produk to service_role;
 
+-- tier_konfigurasi: aturan tier global. Toko hanya perlu MEMBACA (lewat RPC
+-- tier_dari/tier_daftar), tidak boleh mengubah. Admin mengubahnya lewat
+-- service_role / SQL Editor.
+alter table public.tier_konfigurasi enable row level security;
+
+drop policy if exists "tier_konfigurasi_baca" on public.tier_konfigurasi;
+create policy "tier_konfigurasi_baca" on public.tier_konfigurasi
+  for select to anon, authenticated using (true);
+
 -- ---------------------------------------------------------------------------
 -- 12. Grants
 -- ---------------------------------------------------------------------------
@@ -922,7 +972,6 @@ grant execute on function public.generate_license(text, text, text, text, text, 
 grant execute on function public.activate_license(text, text, text, text) to service_role;
 grant execute on function public.tier_rate_of(integer) to anon, authenticated, service_role;
 grant execute on function public.tier_name_of(integer) to anon, authenticated, service_role;
-grant execute on function public.base_commission_of(text) to anon, authenticated, service_role;
 grant execute on function public.resolve_produk_harga(uuid, text) to service_role;
 grant execute on function public.catat_langganan_bulan(uuid) to authenticated, service_role;
 -- FIX 2026-10: toko tidak boleh memperpanjang sendiri lewat RPC; admin yang
