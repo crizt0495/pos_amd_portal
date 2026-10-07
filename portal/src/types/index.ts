@@ -54,7 +54,8 @@ export interface License {
   pembeli_hp: string | null;
   alamat: string | null;
   komisi_amount: number;
-  tier: TierName;
+  /** Nama tier saat key dibuat (snapshot). Bisa juga 'Tanpa Tier' bila admin belum mengatur. */
+  tier: string;
   tier_rate: number;
   expires_at: string | null;
   created_at: string;
@@ -170,7 +171,8 @@ export interface GenerateLicenseResponse {
   message: string;
   license?: License;
   quota?: number;
-  tier?: TierName;
+  /** Nama tier saat key dibuat; 'Tanpa Tier' bila admin belum mengatur. */
+  tier?: string;
   komisi?: number;
   /** Harga acuan yang dipakai menghitung komisi key ini. */
   harga?: number | null;

@@ -2,7 +2,12 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { tierOf, type TierRule } from '@/lib/commission';
+import {
+  STRUKTUR_TIER,
+  tierDariBaris,
+  urutkanTier,
+  type TierAturan,
+} from '@/lib/commission';
 import { createClient } from '@/lib/supabase/server';
 import type { License, Partner, RekapToko } from '@/types';
 
@@ -58,8 +63,14 @@ export interface TokoStats {
   komisiPenjualan: number;
   /** Akumulasi komisi langganan bulan 2 ke atas. */
   komisiLangganan: number;
-  /** Tier mengikuti `terjual`, jadi sama dengan yang dipakai di Profile. */
-  tier: TierRule;
+  /**
+   * Tier toko, dibaca dari database (RPC tier). `null` kalau database belum
+   * punya aturan tier sama sekali — itu TIDAK berarti Bronze 5%. Pemanggil
+   * wajib menampilkan "Belum diatur admin".
+   */
+  tier: TierAturan | null;
+  /** Seluruh aturan tier, untuk tabel tier di halaman Profile. */
+  tierSemua: TierAturan[];
   /** Key terbaru (maks. 20) — untuk daftar "Riwayat Key". */
   licenses: License[];
   /** Jumlah SELURUH key bertipe bundle (bukan hanya 20 terbaru). */
@@ -118,6 +129,63 @@ function petaBulan(v: unknown): Record<string, number> {
 }
 
 /**
+ * Baca tier + persentasenya DARI DATABASE, bukan dari angka di kode.
+ *
+ * Urutan sumber:
+ *  1. RPC `tier_daftar` — membaca tabel `tier_konfigurasi` (schema.sql bagian
+ *     5). Ini yang dipakai setelah schema.sql dijalankan ulang. Nama, rentang,
+ *     dan persen semuanya ikut berubah kalau admin mengubah tabelnya.
+ *  2. Kalau belum ada, RPC lama `tier_name_of` + `tier_rate_of` (dua-duanya
+ *     masih di database). Rentang hanya untuk tata letak, persen tetap dari DB.
+ *  3. Kalau dua-duanya gagal, `tier = null` → pemanggil menampilkan
+ *     "Belum diatur admin". Tidak ada fallback ke angka 5/10/20/30 di kode.
+ */
+async function bacaTier(terjual: number): Promise<{
+  tier: TierAturan | null;
+  tierSemua: TierAturan[];
+}> {
+  const supabase = createClient();
+
+  // 1) tier_daftar (tabel tier_konfigurasi). Nama kolom mengikuti tabel:
+  //    min_terjual / batas_atas / rate.
+  const daftar = await supabase.rpc('tier_daftar');
+  if (!daftar.error && Array.isArray(daftar.data) && daftar.data.length > 0) {
+    type BarisDaftar = { nama: string; min_terjual: number | null; batas_atas: number | null; rate: number | null };
+    const semua = urutkanTier(
+      (daftar.data as BarisDaftar[]).map((r) =>
+        tierDariBaris({ nama: r.nama, min: r.min_terjual, max: r.batas_atas, rate: r.rate }),
+      ),
+    );
+    const aktif = semua.filter((t) => t.min <= terjual).at(-1) ?? semua[0] ?? null;
+    console.log('[toko-stats] tier dari DB (tier_daftar):', aktif?.nama ?? '-', aktif?.rate ?? '-');
+    return { tier: aktif, tierSemua: semua };
+  }
+  if (daftar.error && !/tier_daftar/i.test(daftar.error.message ?? '')) {
+    console.error('[toko-stats] gagal baca RPC tier_daftar:', daftar.error.message);
+  }
+
+  // 2) tier_name_of + tier_rate_of (fungsi database yang sudah ada)
+  const nama = await supabase.rpc('tier_name_of', { p_total_terjual: terjual });
+  if (nama.error) {
+    console.error('[toko-stats] gagal baca RPC tier_name_of:', nama.error.message);
+  }
+  const namaAktif = typeof nama.data === 'string' && nama.data !== '' ? nama.data : null;
+  if (!namaAktif) return { tier: null, tierSemua: [] };
+
+  const semua: TierAturan[] = [];
+  for (const struktur of STRUKTUR_TIER) {
+    const rate = await supabase.rpc('tier_rate_of', { p_total_terjual: struktur.min });
+    semua.push(
+      tierDariBaris({ ...struktur, rate: rate.error ? null : (rate.data as number | null) }),
+    );
+  }
+
+  const aktif = semua.find((t) => t.nama === namaAktif) ?? null;
+  console.log('[toko-stats] tier dari DB (tier_name_of):', aktif?.nama ?? '-', aktif?.rate ?? '-');
+  return { tier: aktif, tierSemua: semua };
+}
+
+/**
  * Baca view `toko_rekap`.
  *
  * Kalau view belum ada (SQL Editor belum pernah dijalankan ulang), jangan
@@ -170,7 +238,8 @@ export const getTokoStats = cache(
       komisiTotal: 0,
       komisiPenjualan: 0,
       komisiLangganan: 0,
-      tier: tierOf(0),
+      tier: null,
+      tierSemua: [],
       licenses: [],
       bundleCount: 0,
       appCount: 0,
@@ -225,6 +294,7 @@ export const getTokoStats = cache(
     if (rekap) {
       const sisa = angka(rekap.sisa);
       const terjual = angka(rekap.total_key);
+      const tierInfo = await bacaTier(terjual);
       return {
         partner: {
           id: rekap.partner_id,
@@ -248,7 +318,8 @@ export const getTokoStats = cache(
         komisiTotal: angka(rekap.total_komisi),
         komisiPenjualan: angka(rekap.komisi_penjualan),
         komisiLangganan: angka(rekap.komisi_langganan),
-        tier: tierOf(terjual),
+        tier: tierInfo.tier,
+        tierSemua: tierInfo.tierSemua,
         licenses,
         bundleCount: angka(rekap.bundle_count),
         appCount: angka(rekap.app_count),
@@ -311,6 +382,7 @@ export const getTokoStats = cache(
     const totalKey = semua.count ?? baris.length;
     const sisa = angka(partner.license_quota);
     const terjual = totalKey;
+    const tierInfo = await bacaTier(terjual);
 
     return {
       partner,
@@ -320,7 +392,8 @@ export const getTokoStats = cache(
       komisiTotal: komisiPenjualan + komisiLangganan,
       komisiPenjualan,
       komisiLangganan,
-      tier: tierOf(terjual),
+      tier: tierInfo.tier,
+      tierSemua: tierInfo.tierSemua,
       licenses,
       bundleCount: bundle.count ?? 0,
       appCount: aplikasi.count ?? 0,

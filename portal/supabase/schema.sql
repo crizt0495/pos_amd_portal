@@ -972,6 +972,9 @@ grant execute on function public.generate_license(text, text, text, text, text, 
 grant execute on function public.activate_license(text, text, text, text) to service_role;
 grant execute on function public.tier_rate_of(integer) to anon, authenticated, service_role;
 grant execute on function public.tier_name_of(integer) to anon, authenticated, service_role;
+grant execute on function public.tier_dari(integer) to anon, authenticated, service_role;
+grant execute on function public.tier_daftar() to anon, authenticated, service_role;
+grant select on public.tier_konfigurasi to anon, authenticated;
 grant execute on function public.resolve_produk_harga(uuid, text) to service_role;
 grant execute on function public.catat_langganan_bulan(uuid) to authenticated, service_role;
 -- FIX 2026-10: toko tidak boleh memperpanjang sendiri lewat RPC; admin yang

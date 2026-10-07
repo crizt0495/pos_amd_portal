@@ -19,8 +19,13 @@ import { Field, Input, InputTelepon, Textarea } from '@/components/ui/form';
 import { bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
-import { TIER_RULES, tierOf, tierRangeLabel, tierRangePendek } from '@/lib/commission';
-import type { TierName } from '@/types';
+import {
+  tierDariBaris,
+  tierRangeLabel,
+  tierRangePendek,
+  tierRateLabel,
+  type BarisTier,
+} from '@/lib/commission';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -29,17 +34,31 @@ interface Props {
   totalTerjual: number;
   quota: number;
   langganan: import('@/lib/supabase/langganan').LanggananToko[];
+  /** Tier aktif dari database; `null` = belum diatur admin. */
+  tierAktif: BarisTier | null;
+  /** Seluruh aturan tier dari database, untuk kotak tier. */
+  tierSemua: BarisTier[];
 }
 
 /** Warna bulatan icon toko mengikuti tier toko (Bronze → Platinum). */
-const TIER_ICON_BG: Record<TierName, string> = {
+const TIER_ICON_BG: Record<string, string> = {
   Bronze: 'bg-amber-800',
   Silver: 'bg-zinc-400',
   Gold: 'bg-yellow-500',
   Platinum: 'bg-slate-800',
 };
 
-export default function ProfileForm({ initial, email, totalTerjual, quota, langganan }: Props) {
+const TIER_ICON_FALLBACK = 'bg-zinc-400';
+
+export default function ProfileForm({
+  initial,
+  email,
+  totalTerjual,
+  quota,
+  langganan,
+  tierAktif,
+  tierSemua,
+}: Props) {
   const router = useRouter();
 
   const [namaToko, setNamaToko] = React.useState(initial.nama_toko);
@@ -53,7 +72,10 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
   const ui = useClickCooldown(1500);
   const saving = simpan.busy;
 
-  const tier = tierOf(totalTerjual);
+  /* Tier + persen dari database (via getTokoStats). `null` = belum diatur
+     admin, dan itu memang ditampilkan begitu — bukan diganti Bronze 5%. */
+  const tier = tierAktif ? tierDariBaris(tierAktif) : null;
+  const semuaTier = React.useMemo(() => tierSemua.map(tierDariBaris), [tierSemua]);
 
   /* ----------------------------- validasi ----------------------------- */
   const namaError = React.useMemo(() => {
@@ -137,7 +159,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
         <div
           className={cn(
             'grid h-24 w-24 place-items-center rounded-full',
-            TIER_ICON_BG[tier.name],
+            tier ? (TIER_ICON_BG[tier.nama] ?? TIER_ICON_FALLBACK) : TIER_ICON_FALLBACK,
           )}
         >
           <Store size={44} className="text-white" aria-hidden="true" />
@@ -254,13 +276,16 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
         <div className="rounded-2xl bg-zinc-900 p-4 text-white">
           <p className="text-[11px] text-zinc-400">Tier Anda</p>
           <p className="mt-0.5 flex items-center gap-2 text-[20px] font-bold">
-            <Medal className="h-5 w-5" /> {tier.name}
+            <Medal className="h-5 w-5" /> {tier ? tier.nama : 'Belum diatur admin'}
           </p>
           <p className="mt-1 text-[12px] text-zinc-300">
-            Komisi {tier.rate * 100}% · {tierRangeLabel(tier)} ·{' '}
-            {tier.max === null
-              ? 'selalu aktif'
-              : `${Math.max(0, tier.max - totalTerjual)} key lagi`}
+            {tier
+              ? `Komisi ${tierRateLabel(tier)} · ${tierRangeLabel(tier)} · ${
+                  tier.max === null
+                    ? 'selalu aktif'
+                    : `${Math.max(0, tier.max - totalTerjual)} key lagi`
+                }`
+              : 'Persentase komisi belum diatur admin di database.'}
           </p>
         </div>
 
@@ -269,11 +294,11 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
             "Tier Anda" yang sudah menyebut rentang + sisa key. Tier aktif
             diberi border hitam tebal, sisanya border tipis. */}
         <ul className="mt-3 grid grid-cols-4 gap-2">
-          {TIER_RULES.map((t) => {
-            const current = t.name === tier.name;
+          {semuaTier.map((t) => {
+            const current = tier !== null && t.nama === tier.nama;
             return (
               <li
-                key={t.name}
+                key={t.nama}
                 className={cn(
                   'flex flex-col items-center rounded-xl p-3 text-center transition',
                   current
@@ -296,7 +321,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
                     current ? 'text-zinc-900' : 'text-zinc-500',
                   )}
                 >
-                  {t.name}
+                  {t.nama}
                 </span>
                 <span
                   className={cn(
@@ -304,7 +329,7 @@ export default function ProfileForm({ initial, email, totalTerjual, quota, langg
                     current ? 'text-zinc-900' : 'text-zinc-600',
                   )}
                 >
-                  {t.rate * 100}%
+                  {tierRateLabel(t)}
                 </span>
                 <span className="mt-1 text-[9px] leading-tight text-gray-500">
                   {tierRangePendek(t)}

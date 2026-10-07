@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 
 import { KeyList } from '@/components/portal/key-list';
 import { ProfileMenu } from '@/components/portal/profile-menu';
-import { tierRangeLabel } from '@/lib/commission';
+import { tierRangeLabel, tierRateLabel } from '@/lib/commission';
 import { rupiah } from '@/lib/format';
 import { getPortalUser } from '@/lib/supabase/session';
 import { getTokoStats } from '@/lib/supabase/toko-stats';
@@ -70,9 +70,12 @@ export default async function HomePage() {
 
         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5 text-[11px] text-zinc-400">
           <span className="inline-flex items-center gap-1">
-            <Sparkles className="h-3 w-3" /> Tier {tier.name} · komisi {tier.rate * 100}%
+            <Sparkles className="h-3 w-3" />{' '}
+            {tier
+              ? `Tier ${tier.nama} · komisi ${tierRateLabel(tier)}`
+              : 'Tier belum diatur admin'}
           </span>
-          <span>{tierRangeLabel(tier)}</span>
+          <span>{tier ? tierRangeLabel(tier) : ''}</span>
         </div>
       </section>
 

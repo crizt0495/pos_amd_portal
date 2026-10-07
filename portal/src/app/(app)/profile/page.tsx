@@ -22,7 +22,7 @@ export default async function ProfilePage() {
     getTokoStats(user.id, false),
     getLanggananToko(user.id),
   ]);
-  const { partner, terjual, sisa } = stats;
+  const { partner, terjual, sisa, tier, tierSemua } = stats;
 
   return (
     <ProfileForm
@@ -35,6 +35,8 @@ export default async function ProfilePage() {
       totalTerjual={terjual}
       quota={sisa}
       langganan={langganan}
+      tierAktif={tier}
+      tierSemua={tierSemua}
     />
   );
 }
