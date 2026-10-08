@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { LanggananList } from '@/components/portal/langganan-list';
 import { Field, Input, InputTelepon, Textarea } from '@/components/ui/form';
-import { bersihkanTelepon } from '@/lib/format';
+import { angka, bersihkanTelepon } from '@/lib/format';
 import { cekAlamat, cekTelepon, namaValid } from '@/lib/validasi';
 import { useButtonGuard, useClickCooldown } from '@/lib/useButtonGuard';
 import {
@@ -212,11 +212,11 @@ export default function ProfileForm({
           </div>
           <div className="mt-1.5 flex items-center justify-between">
             <span>Total terjual</span>
-            <span className="tabular font-semibold text-zinc-700">{totalTerjual} key</span>
+            <span className="tabular font-semibold text-zinc-700">{angka(totalTerjual)} key</span>
           </div>
           <div className="mt-1.5 flex items-center justify-between">
             <span>Sisa kuota</span>
-            <span className="tabular font-semibold text-zinc-700">{quota} key</span>
+            <span className="tabular font-semibold text-zinc-700">{angka(quota)} key</span>
           </div>
         </div>
 

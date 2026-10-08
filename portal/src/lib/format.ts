@@ -12,6 +12,13 @@ export function rupiah(value: number | string | null | undefined): string {
   return `Rp. ${ANGKA.format(n)}`;
 }
 
+/** Angka berpemisah ribuan tanpa "Rp": 1250 -> "1.250". */
+export function angka(value: number | string | null | undefined): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return '0';
+  return ANGKA.format(n);
+}
+
 /** Versi ringkas untuk kartu statistik: 1.250.000 -> "Rp. 1,25jt". */
 export function rupiahRingkas(value: number | null | undefined): string {
   const n = Number(value ?? 0);

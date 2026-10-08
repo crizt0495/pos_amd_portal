@@ -4,7 +4,7 @@ import { Sparkles } from 'lucide-react';
 import { KeyList } from '@/components/portal/key-list';
 import { ProfileMenu } from '@/components/portal/profile-menu';
 import { tierRangeLabel, tierRateLabel } from '@/lib/commission';
-import { rupiah } from '@/lib/format';
+import { angka, rupiah } from '@/lib/format';
 import { getPortalUser } from '@/lib/supabase/session';
 import { getTokoStats } from '@/lib/supabase/toko-stats';
 
@@ -45,12 +45,12 @@ export default async function HomePage() {
       {/* Kartu statistik 3 kolom */}
       <section className="grid grid-cols-3 gap-2.5">
         <StatCard
-          value={`${sisa}/${terjual}`}
+          value={`${angka(sisa)}/${angka(terjual)}`}
           label="Sisa / Terjual"
-          sub={`dari ${kuotaAwal} kuota`}
+          sub={`dari ${angka(kuotaAwal)} kuota`}
         />
-        <StatCard value={String(bundleCount)} label="Bundle" />
-        <StatCard value={String(appCount)} label="Aplikasi" />
+        <StatCard value={angka(bundleCount)} label="Bundle" />
+        <StatCard value={angka(appCount)} label="Aplikasi" />
       </section>
 
       {/* Kartu hitam total komisi */}
